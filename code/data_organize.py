@@ -149,8 +149,8 @@ def extract_relevant_subreddits(in_d, out_d):
         rel_data.coalesce(1).saveAsTextFile(out_d + filename)
         if len(not_wanted) > 0: 
             with open(out_d + 'bad_jsons/' + filename + '.txt', 'w') as outfile: 
-               for line in not_wanted:
-                  outfile.write(line + '\n') 
+                for line in not_wanted:
+                    outfile.write(line + '\n') 
         pack_file(in_d, f)
 
 def find_urban_dictionary(): 
@@ -170,9 +170,9 @@ def main():
     #check_duplicate_months(IN_S, [('RS_2017-11.bz2', 'RS_2017-11.xz')])
     #check_duplicate_months(IN_S, [('RS_2017-07.bz2', 'RS_2017-07.xz')])
     #find_urban_dictionary()
-    #in_d = '/mnt/data0/corpora/reddit/comments/'
-    #out_d = '/mnt/data0/lucy/manosphere/data/comments/'
-    #extract_relevant_subreddits(in_d, out_d)
+    in_d = '/mnt/data0/corpora/reddit/comments/'
+    out_d = '/mnt/data0/lucy/manosphere/data/comments/'
+    extract_relevant_subreddits(in_d, out_d)
     #in_d = '/mnt/data0/corpora/reddit/submissions/'
     #out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
     #extract_relevant_subreddits(in_d, out_d)
