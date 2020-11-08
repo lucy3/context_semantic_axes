@@ -123,8 +123,6 @@ def extract_relevant_subreddits(in_d, out_d):
     """
     Creates new files containing 
     jsons of only relevant subreddits
-    and a same-size sample of the
-    rest of Reddit 
     @inputs: 
     - in_d: folder with inputs
     - out_d: folder with outputs
@@ -139,7 +137,7 @@ def extract_relevant_subreddits(in_d, out_d):
             relevant_subs.add(name)
     for f in os.listdir(in_d):
         filename = f.split('.')[0]
-        if os.path.isdir(out_d + filename): continue
+        if os.path.isdir(out_d + filename): continue # skip ones we already have
         unpack_file(in_d, f)
         data = sc.textFile(in_d + filename)
         not_wanted = data.filter(get_dumb_lines).collect()
@@ -148,6 +146,7 @@ def extract_relevant_subreddits(in_d, out_d):
                     json.loads(line)['subreddit'].lower() in relevant_subs)
         rel_data.coalesce(1).saveAsTextFile(out_d + filename)
         if len(not_wanted) > 0: 
+            # write bad lines to bad_jsons
             with open(out_d + 'bad_jsons/' + filename + '.txt', 'w') as outfile: 
                 for line in not_wanted:
                     outfile.write(line + '\n') 
@@ -173,9 +172,9 @@ def main():
     in_d = '/mnt/data0/corpora/reddit/comments/'
     out_d = '/mnt/data0/lucy/manosphere/data/comments/'
     extract_relevant_subreddits(in_d, out_d)
-    #in_d = '/mnt/data0/corpora/reddit/submissions/'
-    #out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
-    #extract_relevant_subreddits(in_d, out_d)
+    in_d = '/mnt/data0/corpora/reddit/submissions/'
+    out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
+    extract_relevant_subreddits(in_d, out_d)
     sc.stop()
 
 if __name__ == '__main__':

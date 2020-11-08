@@ -27,6 +27,7 @@ def get_num_tokens():
             data = data.map(lambda line: len(tokenizer.tokenize(json.loads(line)['body'])))
             total += sum(data.collect())
     print("TOTAL:", total)
+    sc.stop()
     
 def check_valid_comment(line): 
     comment = json.loads(line)
@@ -51,10 +52,11 @@ def get_num_comments():
         sr_month[f] = sr_counts
     with open(LOGS + 'comment_counts.json', 'w') as outfile:
         json.dump(sr_month, outfile)
+    sc.stop()
         
 def main(): 
-    #get_num_comments()
-    get_num_tokens()
+    get_num_comments()
+    #get_num_tokens()
 
 if __name__ == '__main__':
     main()
