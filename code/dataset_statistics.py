@@ -55,8 +55,8 @@ def get_num_comments():
     sc.stop()
         
 def main(): 
-    get_num_comments()
-    #get_num_tokens()
+    #get_num_comments()
+    get_num_tokens()
 
 if __name__ == '__main__':
     main()
