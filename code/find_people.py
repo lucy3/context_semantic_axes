@@ -6,6 +6,8 @@ from collections import Counter, defaultdict
 import os
 import json
 import re
+from pyspark import SparkConf, SparkContext
+from functools import partial
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 COMMENTS = ROOT + 'data/comments/'
@@ -14,6 +16,9 @@ PEOPLE_FILE = ROOT + 'data/people.csv'
 NONPEOPLE_FILE = ROOT + 'data/non-people.csv'
 UD = ROOT + 'logs/urban_dict.csv'
 LOGS = ROOT + 'logs/'
+
+conf = SparkConf()
+sc = SparkContext(conf=conf)
 
 def get_manual_people(): 
     """
@@ -70,6 +75,40 @@ def calculate_ud_coverage():
     print("Missing:", missing_count)
     print("Number of definitions:", num_definitions.values())
     
+def get_term_count_comment(line, all_terms=None): 
+    '''
+    Returns a list where keys are subreddits and terms and values
+    are counts
+    '''
+    d = json.loads(line)
+    if 'body' not in d: 
+        return []
+    text = d['body'].lower()
+    sr = d['subreddit'].lower()
+    term_counts = Counter()
+    for term in all_terms: 
+        res = re.findall(r'\b' + re.escape(term) + r'\b', text)
+        term_counts[term] += len(res)
+    ret = []
+    for term in term_counts: 
+        ret.append(((sr, term), term_counts[term]))
+    return ret 
+
+def get_term_count_post(line, all_terms=None): 
+    d = json.loads(line)
+    if 'selftext' not in d: 
+        return []
+    text = d['selftext'].lower()
+    sr = d['subreddit'].lower()
+    term_counts = Counter()
+    for term in all_terms:
+        res = re.findall(r'\b' + re.escape(term) + r'\b', text)
+        term_counts[term] += len(res)
+    ret = []
+    for term in term_counts: 
+        ret.append(((sr, term), term_counts[term]))
+    return ret 
+    
 def count_words_reddit(): 
     people, _ = get_manual_people()
     nonpeople = get_manual_nonpeople()
@@ -78,32 +117,31 @@ def count_words_reddit():
     for f in os.listdir(COMMENTS): 
         if f == 'bad_jsons': continue
         month = f.replace('RC_', '')
-        with open(COMMENTS + f + '/part-00000', 'r') as infile: 
-            for line in infile: 
-                d = json.loads(line)
-                if 'body' not in d: continue
-                text = d['body'].lower()
-                sr = d['subreddit'].lower()
-                for term in all_terms: 
-                    res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-                    if len(res) > 0: 
-                        word_time_place[month + '_' + sr][term] += len(res)
-        with open(SUBMISSIONS + 'RS_' + month + '/part-00000', 'r') as infile: 
-            for line in infile: 
-                d = json.loads(line)
-                if 'selftext' not in d: continue
-                text = d['selftext'].lower()
-                sr = d['subreddit'].lower()
-                for term in all_terms:
-                    res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-                    if len(res) > 0: 
-                        word_time_place[month + '_' + sr][term] += len(res)
-        break # TODO: remove
+        print(month)
+        data = sc.textFile(COMMENTS + f + '/part-00000')
+        data = data.flatMap(partial(get_term_count_comment, all_terms=all_terms))
+        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        data = data.collectAsMap()
+        for key in data: 
+            word_time_place[month + '_' + key[0]][key[1]] += data[key]
+        
+        if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
+            post_path = POSTS + 'RS_' + month + '/part-00000'
+        else: 
+            post_path = POSTS + 'RS_v2_' + month + '/part-00000'
+        data = sc.textFile(post_path)
+        data = data.flatMap(partial(get_term_count_post, all_terms=all_terms))
+        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        data = data.collectAsMap()
+        for key in data: 
+            word_time_place[month + '_' + key[0]][key[1]] += data[key]
+
     with open(LOGS + 'glossword_time_place.json', 'w') as outfile: 
         json.dump(word_time_place, outfile)
 
 def main(): 
     count_words_reddit()
+    sc.stop()
 
 if __name__ == '__main__':
     main()
