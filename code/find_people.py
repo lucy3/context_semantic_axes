@@ -9,9 +9,10 @@ import re
 #from pyspark import SparkConf, SparkContext
 #from functools import partial
 import sys
+import time
 
-#ROOT = '/mnt/data0/lucy/manosphere/'
-ROOT = '/global/scratch/lucy3_li/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/global/scratch/lucy3_li/manosphere/'
 COMMENTS = ROOT + 'data/comments/'
 POSTS = ROOT + 'data/submissions/'
 PEOPLE_FILE = ROOT + 'data/people.csv'
@@ -31,17 +32,16 @@ def get_manual_people():
     with open(PEOPLE_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            if row['community'].strip() != 'generic': 
-                word_sing = row['word (singular)'].strip()
-                plural = row['word (plural)'].strip()
-                if word_sing != '':
-                    if word_sing.lower() in words: print('REPEAT', word_sing)
-                    words.add(word_sing.lower())
-                    sing2plural[word_sing] = plural
-                if plural != '': 
-                    if plural.lower() in words: print('REPEAT', plural)
-                    assert word_sing != ''
-                    words.add(plural.lower())
+           word_sing = row['word (singular)'].strip()
+           plural = row['word (plural)'].strip()
+           if word_sing != '':
+               if word_sing.lower() in words: print('REPEAT', word_sing)
+               words.add(word_sing.lower())
+               sing2plural[word_sing] = plural
+           if plural != '': 
+               if plural.lower() in words: print('REPEAT', plural)
+               assert word_sing != ''
+               words.add(plural.lower())
     return words, sing2plural
 
 def get_manual_nonpeople(): 
@@ -111,7 +111,12 @@ def get_term_count_post(line, all_terms=None):
         ret.append(((sr, term), term_counts[term]))
     return ret 
     
-def count_words_reddit(): 
+def count_words_reddit():
+    """
+    This function is deprecated.
+    It may still be able to run, but it is very slow (1 week)
+    and counts all occurrences of both people and nonpeople glossary words
+    """ 
     people, _ = get_manual_people()
     nonpeople = get_manual_nonpeople()
     all_terms = people | nonpeople
@@ -142,9 +147,8 @@ def count_words_reddit():
         json.dump(word_time_place, outfile)
 
 def count_words_reddit_parallel(): 
-    people, _ = get_manual_people()
-    nonpeople = get_manual_nonpeople()
-    all_terms = people | nonpeople
+    start = time.time()
+    all_terms, _ = get_manual_people()
     f = sys.argv[1]
     month = f.replace('RC_', '')
     term_counts = defaultdict(Counter)
@@ -173,6 +177,7 @@ def count_words_reddit_parallel():
                 term_counts[sr][term] += len(res)
     with open(LOGS + 'glossword_time_place/' + month + '.json', 'w') as outfile: 
         json.dump(term_counts, outfile)
+    print("TIME:", time.time() - start)
 
 def main(): 
     #count_words_reddit()
