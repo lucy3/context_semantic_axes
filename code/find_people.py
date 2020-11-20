@@ -6,10 +6,12 @@ from collections import Counter, defaultdict
 import os
 import json
 import re
-from pyspark import SparkConf, SparkContext
-from functools import partial
+#from pyspark import SparkConf, SparkContext
+#from functools import partial
+import sys
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/lucy3_li/manosphere/'
 COMMENTS = ROOT + 'data/comments/'
 POSTS = ROOT + 'data/submissions/'
 PEOPLE_FILE = ROOT + 'data/people.csv'
@@ -17,8 +19,8 @@ NONPEOPLE_FILE = ROOT + 'data/non-people.csv'
 UD = ROOT + 'logs/urban_dict.csv'
 LOGS = ROOT + 'logs/'
 
-conf = SparkConf()
-sc = SparkContext(conf=conf)
+#conf = SparkConf()
+#sc = SparkContext(conf=conf)
 
 def get_manual_people(): 
     """
@@ -139,9 +141,43 @@ def count_words_reddit():
     with open(LOGS + 'glossword_time_place.json', 'w') as outfile: 
         json.dump(word_time_place, outfile)
 
+def count_words_reddit_parallel(): 
+    people, _ = get_manual_people()
+    nonpeople = get_manual_nonpeople()
+    all_terms = people | nonpeople
+    f = sys.argv[1]
+    month = f.replace('RC_', '')
+    term_counts = defaultdict(Counter)
+    with open(COMMENTS + f + '/part-00000', 'r') as infile: 
+        for line in infile: 
+            d = json.loads(line)
+            if 'body' not in d: continue
+            text = d['body'].lower()
+            sr = d['subreddit'].lower()
+            for term in all_terms: 
+                res = re.findall(r'\b' + re.escape(term) + r'\b', text)
+                term_counts[sr][term] += len(res)
+
+    if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
+        post_path = POSTS + 'RS_' + month + '/part-00000'
+    else: 
+        post_path = POSTS + 'RS_v2_' + month + '/part-00000'
+    with open(post_path, 'r') as infile: 
+        for line in infile: 
+            d = json.loads(line)
+            if 'selftext' not in d: continue
+            text = d['selftext'].lower()
+            sr = d['subreddit'].lower()
+            for term in all_terms:
+                res = re.findall(r'\b' + re.escape(term) + r'\b', text)
+                term_counts[sr][term] += len(res)
+    with open(LOGS + 'glossword_time_place/' + month + '.json', 'w') as outfile: 
+        json.dump(term_counts, outfile)
+
 def main(): 
-    count_words_reddit()
-    sc.stop()
+    #count_words_reddit()
+    count_words_reddit_parallel()
+    #sc.stop()
 
 if __name__ == '__main__':
     main()
