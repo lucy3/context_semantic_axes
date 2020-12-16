@@ -32,16 +32,16 @@ def get_manual_people():
     with open(PEOPLE_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-           word_sing = row['word (singular)'].strip()
-           plural = row['word (plural)'].strip()
-           if word_sing != '':
-               if word_sing.lower() in words: print('REPEAT', word_sing)
-               words.add(word_sing.lower())
-               sing2plural[word_sing] = plural
-           if plural != '': 
-               if plural.lower() in words: print('REPEAT', plural)
-               assert word_sing != ''
-               words.add(plural.lower())
+            word_sing = row['word (singular)'].strip()
+            plural = row['word (plural)'].strip()
+            if word_sing != '':
+                if word_sing.lower() in words: print('REPEAT', word_sing)
+                words.add(word_sing.lower())
+                sing2plural[word_sing] = plural
+            if plural != '': 
+                if plural.lower() in words: print('REPEAT', plural)
+                assert word_sing != ''
+                words.add(plural.lower())
     return words, sing2plural
 
 def get_manual_nonpeople(): 
@@ -179,9 +179,35 @@ def count_words_reddit_parallel():
         json.dump(term_counts, outfile)
     print("TIME:", time.time() - start)
 
+def save_occurring_glosswords(): 
+    '''
+    Save only glossary words that actually appear in the text, 
+    print out ones that do not appear. 
+    '''
+    words = Counter()
+    all_words = set()
+    for f in os.listdir(LOGS + 'glossword_time_place/'): 
+        with open(LOGS + 'glossword_time_place/' + f, 'r') as infile: 
+            counts = json.load(infile)
+            for sr in counts: 
+                for w in counts[sr]: 
+                    all_words.add(w)
+                    if counts[sr][w] != 0: 
+                        words[w] += counts[sr][w]
+    print("Missing glossary words:")
+    num_missing = 0
+    for w in sorted(all_words): 
+        if w not in words: 
+            print(w)
+            num_missing += 1
+    print("Number of missing", num_missing, "out of", len(all_words), "words")
+    with open(LOGS + 'glossword_counts.json', 'w') as outfile: 
+        json.dump(words, outfile)
+
 def main(): 
     #count_words_reddit()
-    count_words_reddit_parallel()
+    #count_words_reddit_parallel()
+    save_occurring_glosswords()
     #sc.stop()
 
 if __name__ == '__main__':
