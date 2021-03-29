@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 import os
 import json
 import re
-from pyspark import SparkConf, SparkContext
+#from pyspark import SparkConf, SparkContext
 from functools import partial
 import sys
 import time
@@ -20,8 +20,8 @@ NONPEOPLE_FILE = ROOT + 'data/non-people.csv'
 UD = ROOT + 'logs/urban_dict.csv'
 LOGS = ROOT + 'logs/'
 
-conf = SparkConf()
-sc = SparkContext(conf=conf)
+#conf = SparkConf()
+#sc = SparkContext(conf=conf)
 
 def get_manual_people(): 
     """
@@ -231,13 +231,25 @@ def count_glosswords_in_tags():
     data = data.collectAsMap()
     with open(LOGS + 'tagged_glossword_counts.json', 'w') as outfile: 
         json.dump(data, outfile)
+        
+def get_ngrams_glosswords(): 
+    '''
+    Get number of tokens in glossary words
+    '''
+    all_terms, _ = get_manual_people()
+    num_tokens = defaultdict(list)
+    for w in all_terms: 
+        num_tokens[len(w.split())].append(w)
+    print(num_tokens.keys())
+    print(num_tokens[5], num_tokens[4], num_tokens[3])
 
 def main(): 
     #count_words_reddit()
     #count_words_reddit_parallel()
     #save_occurring_glosswords()
-    count_glosswords_in_tags()
-    sc.stop()
+    #count_glosswords_in_tags()
+    get_ngrams_glosswords()
+    #sc.stop()
 
 if __name__ == '__main__':
     main()

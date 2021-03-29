@@ -63,7 +63,7 @@ def get_sr_cats():
 def sample_reddit(): 
     categories = get_sr_cats()
     k = 25
-    samples = defaultdict(list) # {cat: [30 comments]}
+    samples = defaultdict(list) # {cat: [25 comments]}
     subreddit_count = Counter() # {cat: number of times seen}
     for f in os.listdir(COMMENTS):
         if f == 'bad_jsons': continue 
@@ -76,6 +76,7 @@ def sample_reddit():
                 text = d['body']
                 sr = d['subreddit'].lower()
                 cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
                 subreddit_count[cat] += 1
                 if len(samples[cat]) < k and valid_line(text): 
                     samples[cat].append((line_number, month, sr, text))
@@ -94,6 +95,7 @@ def sample_reddit():
                 text = d['selftext']
                 sr = d['subreddit'].lower()
                 cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
                 subreddit_count[cat] += 1
                 if len(samples[cat]) < k and valid_line(text): 
                     samples[cat].append((line_number, month, sr, text))
@@ -102,6 +104,7 @@ def sample_reddit():
                     if idx < k: 
                         samples[cat][idx] = (line_number, month, sr, text)
                 line_number += 1
+        
     with open(REDDIT_OUT, 'w') as outfile: 
         writer = csv.writer(outfile, delimiter='\t')
         for cat in samples: 
@@ -135,13 +138,13 @@ def sample_forums():
                 
 def sample_by_glossword(): 
     '''
-    Get 5 sentences per glossary word
+    Get 2 sentences per glossary word
     For words with both singular and plural forms
-    this would then be 10 sentences per word 
     '''
     all_words, _ = get_manual_people()
-    k = 5
-    samples = defaultdict(list) # {word: [5 comments]}
+    categories = get_sr_cats()
+    k = 2
+    samples = defaultdict(list) # {word: [comments]}
     glossword_count = Counter() # {word: number of times seen}
     
     # through reddit comments and posts
@@ -155,6 +158,9 @@ def sample_by_glossword():
                 d = json.loads(line)
                 text = d['body']
                 sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
+
                 for word in all_words: 
                     if word in text: # fast check
                         if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
@@ -176,6 +182,9 @@ def sample_by_glossword():
                 d = json.loads(line)
                 text = d['selftext']
                 sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
+
                 for word in all_words: 
                     if word in text: # fast check
                         if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
@@ -215,9 +224,9 @@ def sample_by_glossword():
                 writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
 
 def main(): 
-    #sample_reddit()
+    sample_reddit()
     #sample_forums()
-    sample_by_glossword()
+    #sample_by_glossword()
 
 if __name__ == '__main__':
     main()
