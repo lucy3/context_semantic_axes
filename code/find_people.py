@@ -11,8 +11,8 @@ from functools import partial
 import sys
 import time
 
-ROOT = '/mnt/data0/lucy/manosphere/'
-#ROOT = '/global/scratch/lucy3_li/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/lucy3_li/manosphere/'
 COMMENTS = ROOT + 'data/comments/'
 POSTS = ROOT + 'data/submissions/'
 PEOPLE_FILE = ROOT + 'data/people.csv'
@@ -147,7 +147,6 @@ def count_words_reddit():
         json.dump(word_time_place, outfile)
 
 def count_words_reddit_parallel(): 
-    start = time.time()
     all_terms, _ = get_manual_people()
     f = sys.argv[1]
     month = f.replace('RC_', '')
@@ -177,7 +176,6 @@ def count_words_reddit_parallel():
                 term_counts[sr][term] += len(res)
     with open(LOGS + 'glossword_time_place/' + month + '.json', 'w') as outfile: 
         json.dump(term_counts, outfile)
-    print("TIME:", time.time() - start)
 
 def save_occurring_glosswords(): 
     '''
