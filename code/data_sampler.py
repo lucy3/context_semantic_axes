@@ -2,7 +2,9 @@
 Reservoir sampling 
 
 Single pass over each subreddit and forum
-to sample 30 posts from each. 
+to sample a specific number of posts from each. 
+
+This is used for evaluating different NER models. 
 """
 import json
 import os
