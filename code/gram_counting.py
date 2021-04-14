@@ -17,6 +17,26 @@ conf = SparkConf()
 sc = SparkContext(conf=conf)
 sqlContext = SQLContext(sc)
 
+def get_num_comments(): 
+    '''
+    Get number of comments per subreddit per month
+    '''
+    sr_month = defaultdict(Counter)
+    for filename in os.listdir(COMS): 
+        if filename == 'bad_jsons': continue
+        f = filename.replace('RS_', '').replace('RC_', '').replace('v2_', '').split('.')[0]
+        sr_counts = Counter()
+        for part in os.listdir(COMS + filename):
+            if not part.startswith('part-'): continue
+            data = sc.textFile(COMS + filename + '/' + part)
+            data = data.map(lambda line: (json.loads(line)['subreddit'].lower(), 1))
+            data = data.reduceByKey(lambda n1, n2: n1 + n2)
+            sr_counts += data.collectAsMap()
+        sr_month[f] = sr_counts
+    with open(LOGS + 'comment_counts.json', 'w') as outfile:
+        json.dump(sr_month, outfile)
+    sc.stop()
+
 def check_valid_comment(line): 
     comment = json.loads(line)
     return 'body' in comment and comment['body'].strip() != '[deleted]' \
@@ -34,7 +54,6 @@ def get_ngrams_comment(line, tokenizer=None):
     toks = tokenizer.tokenize(d['body'])
     all_grams = [(sr, i) for i in toks]
     all_grams = get_n_gramlist(all_grams, toks, sr, 2)
-    all_grams = get_n_gramlist(all_grams, toks, sr, 3)
     return all_grams
 
 def get_ngrams_post(line, tokenizer=None): 
@@ -44,7 +63,6 @@ def get_ngrams_post(line, tokenizer=None):
     toks = tokenizer.tokenize(d['selftext'])
     all_grams = [(sr, i) for i in toks]
     all_grams = get_n_gramlist(all_grams, toks, sr, 2)
-    all_grams = get_n_gramlist(all_grams, toks, sr, 3)
     return all_grams
 
 def count_sr(): 
@@ -56,8 +74,8 @@ def count_sr():
       StructField('month', StringType(), True)
       ])
     df = sqlContext.createDataFrame([],schema)
-    for filename in ['RC_2013-11', 'RC_2005-12', 'RC_2015-10', 'RC_2019-06']: 
-    #for filename in os.listdir(COMS): 
+    #for filename in ['RC_2013-11', 'RC_2005-12', 'RC_2015-10', 'RC_2019-06']: 
+    for filename in os.listdir(COMS): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
         data = sc.textFile(COMS + filename + '/part-00000')

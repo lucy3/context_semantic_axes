@@ -136,7 +136,7 @@ def remove_duplicates():
     for filename in os.listdir(FORUMS): 
         if not filename.endswith('.sqlite'): continue
         forum_name = filename.replace('.sqlite', '')
-        if forum_name == 'incels' or forum_name == 'rooshv': continue
+        if forum_name == 'incels' or forum_name == 'rooshv' or forum_name == 'love_shy': continue
         print(forum_name)
         already_seen = set()
         processed_posts = SqliteDict(FORUMS + filename, tablename="processed_posts")
@@ -148,12 +148,32 @@ def remove_duplicates():
                 outfile.write(d_string + '\n')
                 already_seen.add((key, post["id_post"]))
         outfile.close()
+        
+def check_anomaly(): 
+    '''
+    What is the extremely large incels post?
+    '''
+    with open(CLEAN_FORUMS + 'incels', 'r') as infile: 
+        for line in infile: 
+            post = json.loads(line.strip())
+            if post['date_post'] is None: 
+                year = "None"
+                month = "None"
+            else: 
+                date_time_str = post["date_post"].split('-')
+                year = date_time_str[0]
+                month = date_time_str[1]
+                text = post["text_post"]
+                if len(text) > 1000000: 
+                    print(text)
+                    print("-------")
+
 
 def main(): 
-    get_num_forum_comments()
+    #get_num_forum_comments()
     #remove_quotes_and_duplicates()
     #remove_duplicates()
-    
+    check_anomaly()
 
 if __name__ == '__main__':
     main()

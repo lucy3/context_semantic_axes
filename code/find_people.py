@@ -82,6 +82,8 @@ def get_term_count_comment(line, all_terms=None):
     '''
     Returns a list where keys are subreddits and terms and values
     are counts
+    This is for exact string matches, and is slightly deprecated because
+    we have a faster token counter using BERT BasicTokenizer elsewhere. 
     '''
     d = json.loads(line)
     if 'body' not in d: 
@@ -113,6 +115,10 @@ def get_term_count_post(line, all_terms=None):
     return ret 
 
 def count_words_reddit_parallel(): 
+    """
+    This is an exact string matcher, and we have another token
+    counter elsewhere, so this is deprecated. 
+    """
     all_terms, _ = get_manual_people()
     f = sys.argv[1]
     month = f.replace('RC_', '')
@@ -187,6 +193,8 @@ def get_term_count_tagged(line, all_terms=None):
 def count_glosswords_in_tags(): 
     '''
     For every glossary word, count how much it occurs in tagged spans
+
+    TODO: this needs to be rewritten with new tagger results.
     '''
     all_terms, _ = get_manual_people()
     data = sc.textFile(LOGS + 'all_tagged_people')
@@ -198,7 +206,8 @@ def count_glosswords_in_tags():
         
 def get_ngrams_glosswords(): 
     '''
-    Get number of tokens in glossary words
+    Get number of tokens in glossary words, 
+    to see what we are missing if we only use bigrams and unigrams. 
     '''
     all_terms, _ = get_manual_people()
     num_tokens = defaultdict(list)
@@ -227,13 +236,43 @@ def load_gram_counts(categories, sqlContext):
             leave_out.append(sr)
     df = df.filter(~df.community.isin(leave_out))
     return df
+
+def update_gram_counts(line, categories, tokenizer, deps, depheads, gram_counts, reddit=True): 
+    content = line.split('\t')
+    entities = content[1:]
+    if reddit: 
+        sr = content[0]
+        cat = categories[sr.lower()]
+        if cat == 'Health' or cat == 'Criticism': continue
+    for entity in entities: 
+        if entity.strip() == '': continue
+        tup = entity.lower().split(' ')
+        label = tup[0]
+        start = int(tup[1])
+        end = int(tup[2])
+        head = int(tup[3])
+        phrase = ' '.join(tup[4:])
+        phrase = tokenizer.tokenize(phrase)
+        if truncate: 
+            phrase_start = 0
+            # calculate phrase start, excluding determiner or possessive dep on root
+            deprel = deps[str(i)][tup[1]]
+            dephead = depheads[str(i)][tup[1]]
+            if (deprel == 'poss' or deprel == 'det') and dephead == head: 
+                phrase_start = 1
+            # get bigrams and unigrams from start to root
+            if (1 + head - start) - phrase_start in set([1, 2]): 
+                other_phrase = tuple(phrase[phrase_start:1 + head - start])
+                gram_counts[other_phrase] += 1
+        else: 
+            if len(phrase) < 3: 
+                gram_counts[phrase] += 1
+    return gram_counts
     
-def get_significant_entities(): 
+def get_significant_entities(truncate=True): 
     '''
-    Gather tagged entity unigrams, bigrams, and trigrams
+    Gather tagged entity unigrams and bigrams
     that we would want to include in our analysis 
-    
-    TODO
     '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
@@ -241,103 +280,56 @@ def get_significant_entities():
     
     categories = get_sr_cats()
     df = load_gram_counts(categories, sqlContext)
+
     all_counts = df.rdd.map(lambda x: (x[0], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
     all_counts = Counter(all_counts)
     u_total = df.rdd.filter(lambda x: len(x[0].split(' ')) == 1).map(lambda x: (1, x[1])).reduceByKey(lambda x,y: x + y).collect()[0][1]
     b_total = df.rdd.filter(lambda x: len(x[0].split(' ')) == 2).map(lambda x: (1, x[1])).reduceByKey(lambda x,y: x + y).collect()[0][1]
-    t_total = df.rdd.filter(lambda x: len(x[0].split(' ')) == 3).map(lambda x: (1, x[1])).reduceByKey(lambda x,y: x + y).collect()[0][1]
     
     sc.stop()
 
     # look at tagged entities 
     tokenizer = BasicTokenizer(do_lower_case=True)
-    months = ['2013-11', '2005-12', '2015-10', '2019-06']
+    months = ['2011-01', '2011-03', '2006-01', '2011-07', '2008-11', '2008-02', '2012-09', '2014-07']
     gram_counts = Counter()
     for m in months: 
+        with open(LOGS + 'deprel_reddit/' + m + '_deps.json', 'r') as infile: 
+            deps = json.load(infile)
+        with open(LOGS + 'deprel_reddit/' + m + '_depheads.json', 'r') as infile: 
+            depheads = json.load(infile)
         with open(LOGS + 'tagged_people/' + m, 'r') as infile: 
             for i, line in enumerate(infile): 
-                content = line.split('\t')
-                sr = content[0]
-                entities = content[1:]
-                cat = categories[sr.lower()]
-                if cat == 'Health' or cat == 'Criticism': continue
-                for entity in entities: 
-                    if entity.strip() == '': continue
-                    tup = entity.lower().split(' ')
-                    label = tup[0]
-                    start = int(tup[1])
-                    end = int(tup[2])
-                    head = int(tup[3])
-                    phrase = ' '.join(tup[4:])
-                    phrase = tokenizer.tokenize(phrase)
-                    # get head of phrase + up to 2 words before it
-                    other_phrase = phrase[:1 + head - start]
-                    other_phrase = tuple(other_phrase[-3:])
-                    gram_counts[other_phrase] += 1
-    
-    # get PMI of words in phrase
-    npmi_scores = Counter()
-    for gram in gram_counts: 
-        if len(gram) == 1: continue
-        # get phrases that are commonly recognized as people
-        if gram_counts[gram] < 10: continue
-        indiv_prod = 1
-        for w in gram: 
-            indiv_prod *= all_counts[w] / u_total
-        if len(gram) == 2: 
-            N = b_total
-        else: 
-            N = t_total
-        denom = all_counts[' '.join(gram)] / N
-        if denom == 0 or indiv_prod == 0: continue # tokenizer misalignment
-        mi = math.log(denom / indiv_prod)
-        npmi = mi / (-math.log(denom))
-        npmi_scores[gram] = npmi
-    
-    # set threshold of PMI to include as many glossary bigrams and trigrams as possible 
-    words, sing2plural = get_manual_people()
-    bmin_gloss_score = 100
-    tmin_gloss_score = 100
-    for person_word in words: 
-        toks = tuple(tokenizer.tokenize(person_word))
-        if len(toks) == 2: 
-            if toks in npmi_scores: 
-                score = npmi_scores[toks]
-                bmin_gloss_score = min(score, bmin_gloss_score)
-        elif len(toks) == 3: 
-            if toks in npmi_scores: 
-                score = npmi_scores[toks]
-                tmin_gloss_score = min(score, tmin_gloss_score)
+                gram_counts = update_gram_counts(line, categories, tokenizer, \
+                                                 deps, depheads, gram_counts, reddit=True)
+    forums = ['love_shy']
+    for f in forums: 
+        with open(LOGS + 'deprel_forums/' + f + '_deps.json', 'r') as infile: 
+            deps = json.load(infile)
+        with open(LOGS + 'deprel_forums/' + f + '_depheads.json', 'r') as infile: 
+            depheads = json.load(infile)
+        with open(LOGS + 'tagged_people/' + f, 'r') as infile: 
+            for i, line in enumerate(infile): 
+                gram_counts = update_gram_counts(line, categories, tokenizer, \
+                                                 deps, depheads, gram_counts, reddit=True)
     
     # save significant entities that occur at least X times 
-    vocab = []
     unigrams = Counter()
     bigrams = Counter()
-    trigrams = Counter()
     for gram in gram_counts: 
         if gram_counts[gram] < 10: continue
-        if all_counts[' '.join(gram)] < 100: continue
-        if len(gram) == 1: 
+        if all_counts[' '.join(gram)] < 500: continue
+        gram_len = len(gram)
+        assert gram_len < 3 and gram_len > 0
+        if gram_len == 1: 
             unigrams[gram[0]] = all_counts[' '.join(gram)]
-            vocab.append(gram[0])
-        if len(gram) == 2 and npmi_scores[gram] >= bmin_gloss_score: 
+        if gram_len == 2: 
             bigrams[' '.join(gram)] = all_counts[' '.join(gram)]
-            vocab.append(' '.join(gram))
-        if len(gram) == 3 and npmi_scores[gram] >= tmin_gloss_score:
-            trigrams[' '.join(gram)] = all_counts[' '.join(gram)]
-            vocab.append(' '.join(gram))
     for tup in unigrams.most_common(): 
-        print("********UNIGRAM", tup[0], tup[1])
+        print("********UNIGRAM", tup[0], tup[1], all_counts[tup[0]]) # TODO: also write out the count of ner labels they use and their determiner or possessive counts  
     for tup in bigrams.most_common(): 
-        print("--------BIIGRAM", tup[0], tup[1])
-    for tup in trigrams.most_common(): 
-        print("........TRIGRAM", tup[0], tup[1])
-    print("Total number of vocab words:", len(vocab))
+        print("--------BIIGRAM", tup[0], tup[1], all_counts[tup[0]])
 
 def main(): 
-    #count_words_reddit()
-    #count_words_reddit_parallel()
-    #save_occurring_glosswords()
     #count_glosswords_in_tags()
     #get_ngrams_glosswords()
     get_significant_entities()

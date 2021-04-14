@@ -23,7 +23,6 @@ def fix_emojis(text):
 
 def reformat_text_only(): 
     # output a file without metadata
-    '''
     txt = []
     with open(REDDIT_SAMPLE, 'r') as infile: 
         reader = csv.reader(infile, delimiter='\t')
@@ -41,19 +40,6 @@ def reformat_text_only():
         for comment in txt: 
             outfile.write(comment + '\n')
     print(csv.field_size_limit())
-    '''
-    txt = []
-    already_seen = set()
-    with open(GLOSSWORD_SAMPLE, 'r') as infile: 
-        reader = csv.reader(infile, delimiter='\t') 
-        for row in reader: 
-            key = (row[1], row[2], row[3])
-            if key in already_seen: continue
-            txt.append(row[4])
-            already_seen.add(key)
-    with open(GLOSSWORD_TEXT, 'w') as outfile: 
-        for comment in txt: 
-            outfile.write(comment + '\n')
     
 def match_annotations_to_text(): 
     '''
@@ -73,7 +59,6 @@ def match_annotations_to_text():
         for span in spans: 
             print(span, doc[span[0]:span[1]])
     
-    '''
     spans = []
     with open(FORUM_ANN, 'r') as infile: 
         for line in infile: 
@@ -86,7 +71,7 @@ def match_annotations_to_text():
         doc = fix_emojis(doc)
         for span in spans: 
             print(span, doc[span[0]:span[1]])
-    '''
+
 def get_annotations(manual_path, text_path, ner_path): 
     spacy_nlp = spacy.load("en_core_web_sm")
     gold_spans = [] # character spans
