@@ -18,6 +18,7 @@ ROOT = '/mnt/data0/lucy/manosphere/'
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
 COMMENTS = ROOT + 'data/comments/'
 POSTS = ROOT + 'data/submissions/'
+FORUMS = ROOT + 'data/cleaned_forums/'
 PEOPLE_FILE = ROOT + 'data/people.csv'
 NONPEOPLE_FILE = ROOT + 'data/non-people.csv'
 LOGS = ROOT + 'logs/'
@@ -77,132 +78,25 @@ def calculate_ud_coverage():
     print("Total number of people:", len(sing2plural))
     print("Missing:", missing_count)
     print("Number of definitions:", num_definitions.values())
+
+def count_glossword_time_place(): 
+    all_terms, _ = get_manual_people()
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
     
-def get_term_count_comment(line, all_terms=None): 
-    '''
-    Returns a list where keys are subreddits and terms and values
-    are counts
-    This is for exact string matches, and is slightly deprecated because
-    we have a faster token counter using BERT BasicTokenizer elsewhere. 
-    '''
-    d = json.loads(line)
-    if 'body' not in d: 
-        return []
-    text = d['body'].lower()
-    sr = d['subreddit'].lower()
-    term_counts = Counter()
-    for term in all_terms: 
-        res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-        term_counts[term] += len(res)
-    ret = []
-    for term in term_counts: 
-        ret.append(((sr, term), term_counts[term]))
-    return ret 
-
-def get_term_count_post(line, all_terms=None): 
-    d = json.loads(line)
-    if 'selftext' not in d: 
-        return []
-    text = d['selftext'].lower()
-    sr = d['subreddit'].lower()
-    term_counts = Counter()
-    for term in all_terms:
-        res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-        term_counts[term] += len(res)
-    ret = []
-    for term in term_counts: 
-        ret.append(((sr, term), term_counts[term]))
-    return ret 
-
-def count_words_reddit_parallel(): 
-    """
-    This is an exact string matcher, and we have another token
-    counter elsewhere, so this is deprecated. 
-    """
-    all_terms, _ = get_manual_people()
-    f = sys.argv[1]
-    month = f.replace('RC_', '')
-    term_counts = defaultdict(Counter)
-    with open(COMMENTS + f + '/part-00000', 'r') as infile: 
-        for line in infile: 
-            d = json.loads(line)
-            if 'body' not in d: continue
-            text = d['body'].lower()
-            sr = d['subreddit'].lower()
-            for term in all_terms: 
-                res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-                term_counts[sr][term] += len(res)
-
-    if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
-        post_path = POSTS + 'RS_' + month + '/part-00000'
-    else: 
-        post_path = POSTS + 'RS_v2_' + month + '/part-00000'
-    with open(post_path, 'r') as infile: 
-        for line in infile: 
-            d = json.loads(line)
-            if 'selftext' not in d: continue
-            text = d['selftext'].lower()
-            sr = d['subreddit'].lower()
-            for term in all_terms:
-                res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-                term_counts[sr][term] += len(res)
-    with open(LOGS + 'glossword_time_place/' + month + '.json', 'w') as outfile: 
-        json.dump(term_counts, outfile)
-
-def save_occurring_glosswords(): 
-    '''
-    Save only glossary words that actually appear in the text, 
-    print out ones that do not appear. 
-    '''
-    words = Counter()
-    all_words = set()
-    for f in os.listdir(LOGS + 'glossword_time_place/'): 
-        with open(LOGS + 'glossword_time_place/' + f, 'r') as infile: 
-            counts = json.load(infile)
-            for sr in counts: 
-                for w in counts[sr]: 
-                    all_words.add(w)
-                    if counts[sr][w] != 0: 
-                        words[w] += counts[sr][w]
-    print("Missing glossary words:")
-    num_missing = 0
-    for w in sorted(all_words): 
-        if w not in words: 
-            print(w)
-            num_missing += 1
-    print("Number of missing", num_missing, "out of", len(all_words), "words")
-    with open(LOGS + 'glossword_counts.json', 'w') as outfile: 
-        json.dump(words, outfile)
-        
-def get_term_count_tagged(line, all_terms=None):
-    '''
-    Right now this only works on Reddit tags
-    '''
-    entities = line.strip().split('\t')
-    sr = entities[0]
-    text = '\t'.join(entities[1:]) 
-    term_counts = Counter()
-    for term in all_terms: 
-        res = re.findall(r'\b' + re.escape(term) + r'\b', text)
-        term_counts[term] += len(res)
-    ret = []
-    for term in term_counts: 
-        ret.append((sr + '$' + term, term_counts[term]))
-    return ret
-        
-def count_glosswords_in_tags(): 
-    '''
-    For every glossary word, count how much it occurs in tagged spans
-
-    TODO: this needs to be rewritten with new tagger results.
-    '''
-    all_terms, _ = get_manual_people()
-    data = sc.textFile(LOGS + 'all_tagged_people')
-    data = data.flatMap(partial(get_term_count_tagged, all_terms=all_terms))
-    data = data.reduceByKey(lambda n1, n2: n1 + n2)
-    data = data.collectAsMap()
-    with open(LOGS + 'tagged_glossword_counts.json', 'w') as outfile: 
-        json.dump(data, outfile)
+    categories = get_sr_cats()
+    df = load_gram_counts(categories, sqlContext)
+    df = df.filter(df.word.isin(all_terms))
+    pd_df = df.toPandas()
+    sc.stop()
+    
+    missing = all_terms - set(pd_df['word'].to_list()) 
+    print("Number of words missing:", len(missing))
+    for w in missing: 
+        print(w)
+    
+    pd_df.to_csv(LOGS + 'glossword_time_place.csv')
         
 def get_ngrams_glosswords(): 
     '''
@@ -229,21 +123,26 @@ def get_sr_cats():
     return categories
 
 def load_gram_counts(categories, sqlContext): 
-    df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
+    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
     leave_out = []
     for sr in categories: 
         if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
             leave_out.append(sr)
-    df = df.filter(~df.community.isin(leave_out))
+    reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
+    
+    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
+    df = forum_df.union(reddit_df)
     return df
 
-def update_gram_counts(line, categories, tokenizer, deps, depheads, gram_counts, reddit=True): 
+def update_tagged_counts(line, i, categories, tokenizer, deps, depheads, tagged_counts, 
+                       reddit=True, truncate=True): 
     content = line.split('\t')
     entities = content[1:]
     if reddit: 
         sr = content[0]
         cat = categories[sr.lower()]
-        if cat == 'Health' or cat == 'Criticism': continue
+        if cat == 'Health' or cat == 'Criticism': 
+            return tagged_counts
     for entity in entities: 
         if entity.strip() == '': continue
         tup = entity.lower().split(' ')
@@ -259,21 +158,82 @@ def update_gram_counts(line, categories, tokenizer, deps, depheads, gram_counts,
             deprel = deps[str(i)][tup[1]]
             dephead = depheads[str(i)][tup[1]]
             if (deprel == 'poss' or deprel == 'det') and dephead == head: 
+                det_poss = phrase[0]
                 phrase_start = 1
             # get bigrams and unigrams from start to root
             if (1 + head - start) - phrase_start in set([1, 2]): 
-                other_phrase = tuple(phrase[phrase_start:1 + head - start])
-                gram_counts[other_phrase] += 1
+                other_phrase = phrase[phrase_start:1 + head - start]
+                this_entity = ' '.join(other_phrase)
+                tagged_counts[this_entity] += 1
         else: 
-            if len(phrase) < 3: 
-                gram_counts[phrase] += 1
-    return gram_counts
+            phrase_start = 0 
+            deprel = deps[str(i)][tup[1]]
+            dephead = depheads[str(i)][tup[1]]
+            if (deprel == 'poss' or deprel == 'det') and dephead == head: 
+                det_poss = phrase[0]
+                phrase_start = 1
+            # get bigrams and unigrams from start to end
+            other_phrase = phrase[phrase_start:]
+            if len(other_phrase) < 3: 
+                this_entity = ' '.join(other_phrase)
+                tagged_counts[this_entity] += 1
+    return tagged_counts
     
-def get_significant_entities(truncate=True): 
+def count_tagged_entities(truncate=False): 
     '''
     Gather tagged entity unigrams and bigrams
     that we would want to include in our analysis 
     '''
+    # look at tagged entities 
+    tagged_counts = Counter()
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    categories = get_sr_cats()
+    
+    months = os.listdir(COMMENTS)
+    for folder in months: 
+        m = folder.replace('RC_', '')
+        if not os.path.exists(LOGS + 'deprel_reddit/' + m + '_deps.json'): 
+            print("DOES NOT EXIST!!!!!", m)
+            continue
+        with open(LOGS + 'deprel_reddit/' + m + '_deps.json', 'r') as infile: 
+            deps = json.load(infile)
+        with open(LOGS + 'deprel_reddit/' + m + '_depheads.json', 'r') as infile: 
+            depheads = json.load(infile)
+        with open(LOGS + 'tagged_people/' + m, 'r') as infile: 
+            for i, line in enumerate(infile): 
+                tagged_counts = update_tagged_counts(line, i, categories, tokenizer, \
+                                                 deps, depheads, tagged_counts, \
+                                                 reddit=False, truncate=truncate) 
+
+    for f in os.listdir(FORUMS): 
+        print('*************', f)
+        with open(LOGS + 'deprel_forums/' + f + '_deps.json', 'r') as infile: 
+            deps = json.load(infile)
+        with open(LOGS + 'deprel_forums/' + f + '_depheads.json', 'r') as infile: 
+            depheads = json.load(infile)
+        with open(LOGS + 'tagged_people/' + f, 'r') as infile: 
+            for i, line in enumerate(infile): 
+                tagged_counts = update_tagged_counts(line, i, categories, tokenizer, \
+                                                 deps, depheads, tagged_counts, \
+                                                 reddit=False, truncate=truncate)  
+
+    # save tagged counts
+    if truncate: 
+        outpath = WORD_COUNT_DIR + 'tagged_counts.json'
+    else: 
+        outpath = WORD_COUNT_DIR + 'tagged_counts_full.json'
+    with open(outpath, 'w') as outfile: 
+        json.dump(tagged_counts, outfile)
+    
+def get_signficant_entities(truncate=False): 
+    # load tagged counts    
+    if truncate: 
+        inpath = WORD_COUNT_DIR + 'tagged_counts.json'
+    else: 
+        inpath = WORD_COUNT_DIR + 'tagged_counts_full.json'
+    with open(inpath, 'r') as infile: 
+        tagged_counts = json.load(infile)
+    
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
@@ -287,43 +247,18 @@ def get_significant_entities(truncate=True):
     b_total = df.rdd.filter(lambda x: len(x[0].split(' ')) == 2).map(lambda x: (1, x[1])).reduceByKey(lambda x,y: x + y).collect()[0][1]
     
     sc.stop()
-
-    # look at tagged entities 
-    tokenizer = BasicTokenizer(do_lower_case=True)
-    months = ['2011-01', '2011-03', '2006-01', '2011-07', '2008-11', '2008-02', '2012-09', '2014-07']
-    gram_counts = Counter()
-    for m in months: 
-        with open(LOGS + 'deprel_reddit/' + m + '_deps.json', 'r') as infile: 
-            deps = json.load(infile)
-        with open(LOGS + 'deprel_reddit/' + m + '_depheads.json', 'r') as infile: 
-            depheads = json.load(infile)
-        with open(LOGS + 'tagged_people/' + m, 'r') as infile: 
-            for i, line in enumerate(infile): 
-                gram_counts = update_gram_counts(line, categories, tokenizer, \
-                                                 deps, depheads, gram_counts, reddit=True)
-    forums = ['love_shy']
-    for f in forums: 
-        with open(LOGS + 'deprel_forums/' + f + '_deps.json', 'r') as infile: 
-            deps = json.load(infile)
-        with open(LOGS + 'deprel_forums/' + f + '_depheads.json', 'r') as infile: 
-            depheads = json.load(infile)
-        with open(LOGS + 'tagged_people/' + f, 'r') as infile: 
-            for i, line in enumerate(infile): 
-                gram_counts = update_gram_counts(line, categories, tokenizer, \
-                                                 deps, depheads, gram_counts, reddit=True)
-    
     # save significant entities that occur at least X times 
     unigrams = Counter()
     bigrams = Counter()
-    for gram in gram_counts: 
-        if gram_counts[gram] < 10: continue
-        if all_counts[' '.join(gram)] < 500: continue
-        gram_len = len(gram)
+    for gram in tagged_counts: 
+        if tagged_counts[gram] < 10: continue
+        if all_counts[gram] < 500: continue
+        gram_len = len(gram.split(' '))
         assert gram_len < 3 and gram_len > 0
         if gram_len == 1: 
-            unigrams[gram[0]] = all_counts[' '.join(gram)]
+            unigrams[gram[0]] = all_counts[gram]
         if gram_len == 2: 
-            bigrams[' '.join(gram)] = all_counts[' '.join(gram)]
+            bigrams[gram] = all_counts[gram]
     for tup in unigrams.most_common(): 
         print("********UNIGRAM", tup[0], tup[1], all_counts[tup[0]]) # TODO: also write out the count of ner labels they use and their determiner or possessive counts  
     for tup in bigrams.most_common(): 
@@ -332,7 +267,9 @@ def get_significant_entities(truncate=True):
 def main(): 
     #count_glosswords_in_tags()
     #get_ngrams_glosswords()
-    get_significant_entities()
+    get_significant_entities(truncate=False)
+    #count_tagged_entities(truncate=False)
+    #count_glossword_time_place()
 
 if __name__ == '__main__':
     main()

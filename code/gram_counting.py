@@ -11,6 +11,7 @@ import os
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
+FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = ROOT + 'logs/gram_counts/'
 
 conf = SparkConf()
@@ -20,6 +21,8 @@ sqlContext = SQLContext(sc)
 def get_num_comments(): 
     '''
     Get number of comments per subreddit per month
+    
+    This is used to visualize comment counts in the count_viz notebook. 
     '''
     sr_month = defaultdict(Counter)
     for filename in os.listdir(COMS): 
@@ -36,8 +39,28 @@ def get_num_comments():
     with open(LOGS + 'comment_counts.json', 'w') as outfile:
         json.dump(sr_month, outfile)
     sc.stop()
+    
+def get_num_posts(): 
+    sr_month = defaultdict(Counter)
+    for filename in tqdm(os.listdir(SUBS)): 
+        if filename == 'bad_jsons': continue
+        f = filename.replace('RS_', '').replace('RC_', '').replace('v2_', '').split('.')[0]
+        subreddits = Counter()
+        for part in os.listdir(SUBS + filename):
+            if not part.startswith('part-'): continue
+            with open(SUBS + filename + '/' + part, 'r') as infile: 
+                for line in infile: 
+                    d = json.loads(line)
+                    subreddits[d['subreddit'].lower()] += 1
+        for sr in subreddits: 
+            sr_month[f][sr] = subreddits[sr]
+    with open(LOGS + 'submission_counts.json', 'w') as outfile:
+        json.dump(sr_month, outfile)
 
 def check_valid_comment(line): 
+    '''
+    For Reddit comments
+    '''
     comment = json.loads(line)
     return 'body' in comment and comment['body'].strip() != '[deleted]' \
             and comment['body'].strip() != '[removed]'
@@ -49,6 +72,9 @@ def get_n_gramlist(nngramlist, toks, sr, n=2):
     return nngramlist
 
 def get_ngrams_comment(line, tokenizer=None): 
+    '''
+    Reddit comment
+    '''
     d = json.loads(line)
     sr = d['subreddit'].lower()
     toks = tokenizer.tokenize(d['body'])
@@ -57,6 +83,9 @@ def get_ngrams_comment(line, tokenizer=None):
     return all_grams
 
 def get_ngrams_post(line, tokenizer=None): 
+    '''
+    Reddit post
+    '''
     d = json.loads(line)
     all_grams = set()
     sr = d['subreddit'].lower()
@@ -74,26 +103,24 @@ def count_sr():
       StructField('month', StringType(), True)
       ])
     df = sqlContext.createDataFrame([],schema)
-    #for filename in ['RC_2013-11', 'RC_2005-12', 'RC_2015-10', 'RC_2019-06']: 
     for filename in os.listdir(COMS): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
-        data = sc.textFile(COMS + filename + '/part-00000')
-        data = data.filter(check_valid_comment)
-        data = data.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer))
-        data = data.map(lambda n: (n, 1))
-        data = data.reduceByKey(lambda n1, n2: n1 + n2)
-        data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
-        data_df = sqlContext.createDataFrame(data, schema)
-        df = df.union(data_df)
+        cdata = sc.textFile(COMS + filename + '/part-00000')
+        cdata = cdata.filter(check_valid_comment)
+        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer))
+        cdata = cdata.map(lambda n: (n, 1))
+        cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
         
         if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
             post_path = SUBS + 'RS_' + m + '/part-00000'
         else: 
             post_path = SUBS + 'RS_v2_' + m + '/part-00000'
-        data = sc.textFile(post_path)
-        data = data.flatMap(partial(get_ngrams_post, tokenizer=tokenizer))
-        data = data.map(lambda n: (n, 1))
+        pdata = sc.textFile(post_path)
+        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer))
+        pdata = pdata.map(lambda n: (n, 1))
+        data = cdata.union(pdata)
+        
         data = data.reduceByKey(lambda n1, n2: n1 + n2)
         data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
         data_df = sqlContext.createDataFrame(data, schema)
@@ -101,15 +128,49 @@ def count_sr():
     outpath = WORD_COUNT_DIR + 'subreddit_counts'
     df.write.mode('overwrite').parquet(outpath)    
     
+def get_ngrams_comment_forum(line, tokenizer=None): 
+    d = json.loads(line)
+    if d['date_post'] is None: 
+        year = "None"
+        month = "None"
+    else: 
+        date_time_str = d["date_post"].split('-')
+        year = date_time_str[0]
+        month = date_time_str[1]
+    date_month = year + '-' + month
+    toks = tokenizer.tokenize(d['text_post'])
+    all_grams = [(date_month, i) for i in toks]
+    all_grams = get_n_gramlist(all_grams, toks, date_month, 2)
+    return all_grams
+    
 def count_forum(): 
     '''
-    Need to group counts by month
+    We attach "FORUM_" the beginning of the community name
+    to avoid incels the forum and incels the subreddit from clashing
+    later when we combine dataframes. 
     '''
-    pass
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    schema = StructType([
+      StructField('word', StringType(), True),
+      StructField('count', IntegerType(), True),
+      StructField('community', StringType(), True),
+      StructField('month', StringType(), True)
+      ])
+    df = sqlContext.createDataFrame([],schema)
+    for filename in os.listdir(FORUMS):
+        data = sc.textFile(FORUMS + filename)
+        data = data.flatMap(partial(get_ngrams_comment_forum, tokenizer=tokenizer))
+        data = data.map(lambda n: (n, 1))
+        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community='FORUM_' + filename, month=tup[0][0]))
+        data_df = sqlContext.createDataFrame(data, schema)
+        df = df.union(data_df)
+    outpath = WORD_COUNT_DIR + 'forum_counts'
+    df.write.mode('overwrite').parquet(outpath)
 
 def main(): 
     count_sr()
-    count_forum()
+    #count_forum()
     sc.stop()
 
 if __name__ == "__main__":

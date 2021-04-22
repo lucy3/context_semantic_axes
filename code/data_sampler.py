@@ -226,7 +226,7 @@ def sample_by_glossword():
                 writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
 
 def main(): 
-    sample_reddit()
+    #sample_reddit()
     #sample_forums()
     #sample_by_glossword()
 

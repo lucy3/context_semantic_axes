@@ -153,20 +153,23 @@ def check_anomaly():
     '''
     What is the extremely large incels post?
     '''
-    with open(CLEAN_FORUMS + 'incels', 'r') as infile: 
-        for line in infile: 
-            post = json.loads(line.strip())
-            if post['date_post'] is None: 
-                year = "None"
-                month = "None"
-            else: 
-                date_time_str = post["date_post"].split('-')
-                year = date_time_str[0]
-                month = date_time_str[1]
-                text = post["text_post"]
-                if len(text) > 1000000: 
-                    print(text)
-                    print("-------")
+    weird_ones = ['incels', 'mgtow']
+    for f in weird_ones: 
+        with open(CLEAN_FORUMS + f, 'r') as infile: 
+            for line in infile: 
+                post = json.loads(line.strip())
+                if post['date_post'] is None: 
+                    year = "None"
+                    month = "None"
+                else: 
+                    date_time_str = post["date_post"].split('-')
+                    year = date_time_str[0]
+                    month = date_time_str[1]
+                    text = post["text_post"]
+                    if len(text) > 1000000: 
+                        print(len(text))
+                        print(text[:1000])
+                        print("-------")
 
 
 def main(): 
