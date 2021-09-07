@@ -13,6 +13,7 @@ from collections import defaultdict, Counter
 import random
 import csv
 import re
+from helpers import get_sr_cats, valid_line, get_manual_people
 
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
 ROOT = '/mnt/data0/lucy/manosphere/'
@@ -24,43 +25,6 @@ REDDIT_OUT = LOGS + 'reddit_sample'
 FORUM_OUT = LOGS + 'forum_sample'
 GLOSSWORD_OUT = LOGS + 'glossword_sample'
 PEOPLE_FILE = ROOT + 'data/people.csv'
-
-def get_manual_people(): 
-    """
-    get list of words, add plural forms
-    copied from find_people.py
-    """
-    words = set()
-    sing2plural = {}
-    with open(PEOPLE_FILE, 'r') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader: 
-            word_sing = row['word (singular)'].strip()
-            plural = row['word (plural)'].strip()
-            if word_sing != '':
-                if word_sing.lower() in words: print('REPEAT', word_sing)
-                words.add(word_sing.lower())
-                sing2plural[word_sing.lower()] = plural.lower()
-            if plural != '': 
-                if plural.lower() in words: print('REPEAT', plural)
-                assert word_sing != ''
-                words.add(plural.lower())
-    return words, sing2plural
-
-def valid_line(text): 
-    return text.strip() != '[removed]' and text.strip() != '[deleted]' and text.strip() != ''
-
-def get_sr_cats(): 
-    categories = defaultdict(str)
-    with open(ROOT + 'data/subreddits.txt', 'r') as infile: 
-        reader = csv.DictReader(infile)
-        for row in reader: 
-            name = row['Subreddit'].strip().lower()
-            if name.startswith('/r/'): name = name[3:]
-            if name.startswith('r/'): name = name[2:]
-            if name.endswith('/'): name = name[:-1]
-            categories[name] = row['Category after majority agreement']
-    return categories
 
 def sample_reddit(): 
     categories = get_sr_cats()

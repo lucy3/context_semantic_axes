@@ -13,6 +13,8 @@ import time
 import json
 import os
 import csv 
+from collections import Counter
+from helpers import get_sr_cats
 
 conf = SparkConf()
 sc = SparkContext(conf=conf)
@@ -127,17 +129,109 @@ def extract_relevant_subreddits(in_d, out_d):
                 for line in not_wanted:
                     outfile.write(line + '\n') 
         pack_file(in_d, f)
+        
+def get_month_totals(): 
+    '''
+    Remove love_shy, Criticism and Health subreddits when taking in 
+    consideration per-month total post + comment counts 
+    '''
+    categories = get_sr_cats() 
+    month_totals = Counter()
+    with open(LOGS + 'submission_counts.json', 'r') as infile:
+        sr_month = json.load(infile)
+    for month in sr_month: 
+        for sr in sr_month[month]: 
+            if categories[sr] != 'Health' and categories[sr] != 'Criticism':
+                month_totals[month] += sr_month[month][sr]
+    # remove Criticism and Health subreddits 
+    with open(LOGS + 'comment_counts.json', 'r') as infile:
+        sr_coms = json.load(infile)
+    for month in sr_coms: 
+        for sr in sr_coms[month]: 
+            if categories[sr] != 'Health' and categories[sr] != 'Criticism':
+                month_totals[month] += sr_coms[month][sr]
+    with open(LOGS + 'forum_count.json', 'r') as infile:
+        forum_month = json.load(infile)
+    for month in forum_month: 
+        for forum in forum_month[month]: 
+            if forum == 'love_shy': continue
+            if month == 'None-None' or month == '1970-01': continue
+            month_totals[month] += forum_month[month][forum]
+    return month_totals
+        
+def sample_reddit_control(): 
+    '''
+    Sample a set of Reddit that is in equal size to manosphere dataset
+    
+    By the time I ran this function, subreddit_names had Health and
+    Criticism subreddits removed from the list. 
+    '''
+    # get total number of posts + comments per month across communities 
+    month_totals = get_month_totals()
+    # get subreddits that are in our dataset 
+    relevant_subs = set()
+    with open(DATA + 'subreddit_names.txt', 'r') as infile: 
+        for line in infile: 
+            name = line.strip().lower()
+            if name.startswith('/r/'): name = name[3:]
+            if name.startswith('r/'): name = name[2:]
+            if name.endswith('/'): name = name[:-1]
+            relevant_subs.add(name)
+
+    seed = 0
+    for month in month_totals: 
+        # check if path exists
+        sub_input = ''
+        for suffix in ['.xz', '.zst', '.bz2']:
+            if os.path.exists(IN_S + 'RS_' + month + suffix): 
+                sub_input = 'RS_' + month + suffix
+            elif os.path.exists(IN_S + 'RS_v2_' + month + suffix): 
+                sub_input = 'RS_v2_' + month + suffix
+            if sub_input != '': break
+        com_input = ''
+        for suffix in ['.xz', '.zst', '.bz2']:
+            if os.path.exists(IN_C + 'RC_' + month + suffix): 
+                com_input = 'RC_' + month + suffix
+            if com_input != '': break
+        
+        # if inputs exist, filter only subreddits not in our dataset 
+        if sub_input != '' and com_input != '': 
+            unpack_file(IN_S, sub_input)
+            unpack_file(IN_C, com_input) 
+            filename = sub_input.split('.')[0]
+            data = sc.textFile(IN_S + filename) # TODO: fix 
+            data = data.filter(lambda line: not get_dumb_lines(line))
+            sub_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
+                        json.loads(line)['subreddit'].lower() not in relevant_subs)
+        
+            filename = com_input.split('.')[0]
+            data = sc.textFile(IN_C + filename) # TODO: fix 
+            data = data.filter(lambda line: not get_dumb_lines(line))
+            com_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
+                        json.loads(line)['subreddit'].lower() not in relevant_subs)
+
+            # sample from posts and comments
+            sample_size = month_totals[month]
+            print("Sampling", sample_size, "from", month)
+            all_data = com_data.union(sub_data)
+            sampled_data = sc.parallelize(all_data.takeSample(False, sample_size, seed))
+            sampled_data.coalesce(1).saveAsTextFile(DATA + 'reddit_control/' + month)
+    
+        # pack posts and comments
+            pack_file(IN_S, sub_input) 
+            pack_file(IN_C, com_input) 
 
 def main(): 
     #check_duplicate_months(IN_C, [('RC_2018-10.xz', 'RC_2018-10.zst')])
     #check_duplicate_months(IN_S, [('RS_2017-11.bz2', 'RS_2017-11.xz')])
     #check_duplicate_months(IN_S, [('RS_2017-07.bz2', 'RS_2017-07.xz')])
-    in_d = '/mnt/data0/corpora/reddit/comments/'
-    out_d = '/mnt/data0/lucy/manosphere/data/comments/'
-    extract_relevant_subreddits(in_d, out_d)
-    in_d = '/mnt/data0/corpora/reddit/submissions/'
-    out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
-    extract_relevant_subreddits(in_d, out_d)
+#     in_d = '/mnt/data0/corpora/reddit/comments/'
+#     out_d = '/mnt/data0/lucy/manosphere/data/comments/'
+#     extract_relevant_subreddits(in_d, out_d)
+#     in_d = '/mnt/data0/corpora/reddit/submissions/'
+#     out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
+#     extract_relevant_subreddits(in_d, out_d)
+    sample_reddit_control()
     sc.stop()
 
 if __name__ == '__main__':
