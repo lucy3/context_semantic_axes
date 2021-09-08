@@ -179,7 +179,8 @@ def sample_reddit_control():
             relevant_subs.add(name)
 
     seed = 0
-    for month in month_totals: 
+    for month in month_totals:
+        start = time.time() 
         # check if path exists
         sub_input = ''
         for suffix in ['.xz', '.zst', '.bz2']:
@@ -199,13 +200,13 @@ def sample_reddit_control():
             unpack_file(IN_S, sub_input)
             unpack_file(IN_C, com_input) 
             filename = sub_input.split('.')[0]
-            data = sc.textFile(IN_S + filename) # TODO: fix 
+            data = sc.textFile(IN_S + filename) 
             data = data.filter(lambda line: not get_dumb_lines(line))
             sub_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
                         json.loads(line)['subreddit'].lower() not in relevant_subs)
         
             filename = com_input.split('.')[0]
-            data = sc.textFile(IN_C + filename) # TODO: fix 
+            data = sc.textFile(IN_C + filename) 
             data = data.filter(lambda line: not get_dumb_lines(line))
             com_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
                         json.loads(line)['subreddit'].lower() not in relevant_subs)
@@ -215,11 +216,12 @@ def sample_reddit_control():
             print("Sampling", sample_size, "from", month)
             all_data = com_data.union(sub_data)
             sampled_data = sc.parallelize(all_data.takeSample(False, sample_size, seed))
-            sampled_data.coalesce(1).saveAsTextFile(DATA + 'reddit_control/' + month)
+            sampled_data.coalesce(1).write.mode('overwrite').saveAsTextFile(DATA + 'reddit_control/' + month)
     
-        # pack posts and comments
+            # pack posts and comments
             pack_file(IN_S, sub_input) 
             pack_file(IN_C, com_input) 
+        print("TIME:", time.time() - start)
 
 def main(): 
     #check_duplicate_months(IN_C, [('RC_2018-10.xz', 'RC_2018-10.zst')])
