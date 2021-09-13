@@ -7,6 +7,7 @@ from helpers import get_sr_cats
 import math
 from scipy.stats import spearmanr
 from collections import Counter
+import json
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
@@ -62,17 +63,17 @@ def get_time_series(word, df, um_totals, bm_totals):
     word_counts = word_df.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
     word_counts = Counter(word_counts)
     # check if word is unigram OR bigram 
-    assert word.split(' ') < 3
+    assert len(word.split(' ')) < 3
     totals = None
-    if word.split(' ') == 1: 
+    if len(word.split(' ')) == 1: 
         totals = um_totals
-    elif word.split(' ') == 2: 
+    elif len(word.split(' ')) == 2: 
         totals = bm_totals
     # divide month counts by total month count 
     min_month = 'z'
     max_month = '0'
     for m in word_counts: 
-        if month != 'None-None' and month != '1970-01': 
+        if m != 'None-None' and m != '1970-01': 
             min_month = min(m, min_month)
             max_month = max(m, max_month)
 
@@ -80,11 +81,13 @@ def get_time_series(word, df, um_totals, bm_totals):
     ts = []
     start = False
     for m in month_year_iter(min_month, max_month): 
-        print(m, word_counts[m])
         if word_counts[m] > 0: 
             start = True
-        if start: 
+        if start and word_counts[m] != 0: 
+            prob = word_counts[m] / totals[m]
             ts.append(math.log(word_counts[m] / totals[m], 10))
+        else: 
+            ts.append(0)
     end = len(ts)
     for i in range(len(ts) - 1, -1, -1): 
         if ts[i] != 0: 
@@ -94,16 +97,18 @@ def get_time_series(word, df, um_totals, bm_totals):
     
 def calculate_growth_words(ts): 
     # spearman correlation 
-    spearmanr(ts, range(len(ts)))
+    # spearmanr(ts, range(len(ts)))
+    pass
     
 def calculate_decline_words(ts): 
     pass
 
-def main(): 
-    conf = SparkConf()
-    sc = SparkContext(conf=conf)
-    sqlContext = SQLContext(sc)
-    
+def save_word_count_data(sqlContext): 
+    '''
+    This function is used to save a combined
+    word count dataframe (Reddit, excluding Health and Criticism, and forums)
+    and total word counts per month (bm_totals, um_totals)
+    '''
     categories = get_sr_cats()
     df = load_gram_counts(categories, sqlContext)
     unigrams = df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
@@ -115,8 +120,43 @@ def main():
     bm_totals = bigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
     bm_totals = Counter(bm_totals)
     
+    df.write.mode('overwrite').parquet(WORD_COUNT_DIR + 'combined_counts')
+    
+    with open(WORD_COUNT_DIR + 'bigram_totals.json', 'w') as outfile: 
+        json.dump(bm_totals, outfile)
+        
+    with open(WORD_COUNT_DIR + 'unigram_totals.json', 'w') as outfile: 
+        json.dump(um_totals, outfile)
+
+def get_word_count_data(sqlContext): 
+    '''
+    This loads the saved word count data that was produced and
+    precalculated by save_word_count_data() above. 
+    '''
+    df = sqlContext.read.parquet(WORD_COUNT_DIR + 'combined_counts')
+    
+    with open(WORD_COUNT_DIR + 'bigram_totals.json', 'r') as infile: 
+        bm_totals = json.load(infile)
+        
+    with open(WORD_COUNT_DIR + 'unigram_totals.json', 'r') as infile: 
+        um_totals = json.load(infile)
+        
+    return df, um_totals, bm_totals
+
+def main(): 
+    '''
+    Note, if you want to be able to see the
+    printed output more clearly, you can write it to a file 
+    '''
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
+    
+    df, um_totals, bm_totals = get_word_count_data(sqlContext)
+    
     words = ['incel', 'roastie', 'femoid', 'femcel', 'amog']
     for w in words: 
+        print(w)
         ts = get_time_series(w, df, um_totals, bm_totals)
         print(ts)
         break

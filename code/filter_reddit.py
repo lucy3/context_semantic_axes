@@ -179,7 +179,9 @@ def sample_reddit_control():
             relevant_subs.add(name)
 
     seed = 0
-    for month in month_totals:
+    for month in sorted(month_totals.keys()):
+        if os.path.exists(DATA + 'reddit_control/' + month): 
+            continue
         start = time.time() 
         # check if path exists
         sub_input = ''
@@ -216,7 +218,7 @@ def sample_reddit_control():
             print("Sampling", sample_size, "from", month)
             all_data = com_data.union(sub_data)
             sampled_data = sc.parallelize(all_data.takeSample(False, sample_size, seed))
-            sampled_data.coalesce(1).write.mode('overwrite').saveAsTextFile(DATA + 'reddit_control/' + month)
+            sampled_data.coalesce(1).saveAsTextFile(DATA + 'reddit_control/' + month)
     
             # pack posts and comments
             pack_file(IN_S, sub_input) 
