@@ -3,6 +3,7 @@ Find growth and decline words
 """
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext
+from pyspark.sql.functions import col
 from helpers import get_sr_cats
 import math
 from scipy.stats import spearmanr
@@ -48,14 +49,19 @@ def month_year_iter(start, end):
             month = '0' + month
         yield str(y) + '-' + month
 
-def get_time_series(word, df, um_totals, bm_totals): 
+def get_time_series(word, df, um_totals, bm_totals, vocab_sizes): 
     '''
     Gets normalized and log transformed
-    frequencies for each word 
-    
+    frequencies for each word. 
     Normalized means it is word count in month / total words in month
     For bigrams, it's bigram count in month / total bigrams in month
     Log transformed is log10. 
+    
+    - word: word to get time series for
+    - df: dataframe containing word counts
+    - um_totals: total number of unigrams per month
+    - bm_totals: total number of bigrams per month
+    - vocab_sizes: total number of unique unigrams and bigrams 
     '''
     # df filter for word 
     word_df = df.rdd.filter(lambda x: x[0] == word)
@@ -65,6 +71,7 @@ def get_time_series(word, df, um_totals, bm_totals):
     # check if word is unigram OR bigram 
     assert len(word.split(' ')) < 3
     totals = None
+    uniq_count = None
     if len(word.split(' ')) == 1: 
         totals = um_totals
     elif len(word.split(' ')) == 2: 
@@ -78,16 +85,16 @@ def get_time_series(word, df, um_totals, bm_totals):
             max_month = max(m, max_month)
 
     # trim zeros off start and end 
+    # add smoothing to avoid zero counts
     ts = []
     start = False
     for m in month_year_iter(min_month, max_month): 
         if word_counts[m] > 0: 
             start = True
-        if start and word_counts[m] != 0: 
+        if start: 
             prob = word_counts[m] / totals[m]
-            ts.append(math.log(word_counts[m] / totals[m], 10))
-        else: 
-            ts.append(0)
+            prob += 1 / max(totals.values())
+            ts.append(math.log(prob, 10))
     end = len(ts)
     for i in range(len(ts) - 1, -1, -1): 
         if ts[i] != 0: 
@@ -120,6 +127,14 @@ def save_word_count_data(sqlContext):
     bm_totals = bigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
     bm_totals = Counter(bm_totals)
     
+    # total unique bigrams and unigrams
+    unigram_size = unigrams.toDF().select(col("word")).distinct().count()
+    bigram_size = bigrams.toDF().select(col("word")).distinct().count()
+    
+    with open(WORD_COUNT_DIR + 'unique_counts', 'w') as outfile: 
+        outfile.write('UNIGRAMS,' + str(unigram_size))
+        outfile.write('BIGRAMS,' + str(bigram_size))
+    
     df.write.mode('overwrite').parquet(WORD_COUNT_DIR + 'combined_counts')
     
     with open(WORD_COUNT_DIR + 'bigram_totals.json', 'w') as outfile: 
@@ -141,7 +156,15 @@ def get_word_count_data(sqlContext):
     with open(WORD_COUNT_DIR + 'unigram_totals.json', 'r') as infile: 
         um_totals = json.load(infile)
         
-    return df, um_totals, bm_totals
+    word_months = df.select(col("word"),col("month")).distinct().groupBy('month').count()
+    
+    vocab_sizes = {}
+    with open(WORD_COUNT_DIR + 'unique_counts', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split(',')
+            vocab_sizes[contents[0]] = int(contents[1])
+        
+    return df, um_totals, bm_totals, vocab_sizes
 
 def main(): 
     '''
@@ -152,12 +175,12 @@ def main():
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
     
-    df, um_totals, bm_totals = get_word_count_data(sqlContext)
+    df, um_totals, bm_totals, vocab_sizes = get_word_count_data(sqlContext)
     
     words = ['incel', 'roastie', 'femoid', 'femcel', 'amog']
     for w in words: 
         print(w)
-        ts = get_time_series(w, df, um_totals, bm_totals)
+        ts = get_time_series(w, df, um_totals, bm_totals, vocab_sizes)
         print(ts)
         break
         #calculate_growth_words(ts)
