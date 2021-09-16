@@ -92,9 +92,7 @@ def get_time_series(word, df, um_totals, bm_totals, vocab_sizes):
         if word_counts[m] > 0: 
             start = True
         if start: 
-            prob = word_counts[m] / totals[m]
-            prob += 1 / max(totals.values())
-            ts.append(math.log(prob, 10))
+            ts.append(word_counts[m])
     end = len(ts)
     for i in range(len(ts) - 1, -1, -1): 
         if ts[i] != 0: 

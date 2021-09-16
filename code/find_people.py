@@ -13,6 +13,7 @@ import re
 import sys
 import time
 import math
+from tqdm import tqdm
 from helpers import get_sr_cats, get_manual_people
 from nltk.stem.porter import PorterStemmer
 
@@ -266,7 +267,39 @@ def test_lemmatizer():
         stem2 = stemmer.stem(sing_w.split()[-1])
         if stem1 != stem2: 
             print(sing_w, plural_w, stem1, stem2) 
-        
+
+def find_examples(w, outfile): 
+    '''
+    Print some examples of a word
+    '''
+    months = ['2009-01', '2012-01', '2015-01', '2018-01']
+    for month in months: 
+        with open(COMMENTS + 'RC_' + month + '/part-00000', 'r') as infile:
+            i = 0
+            for line in infile: 
+                d = json.loads(line)
+                if w in d['body'].lower(): 
+                    outfile.write(d['body'] + '\n')
+                    outfile.write('----------------\n')
+                    i =+ 1
+                    if i > 3: break
+
+def write_out_examples(): 
+    '''
+    This function prints out examples of some
+    unknown terms being used on Reddit 
+    '''
+    questionable = set()
+    with open(ROOT + 'data/ann_sig_entities.csv', 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader: 
+            if row['keep'] == 'Q': 
+                questionable.add(row['entity'])
+    with open(LOGS + 'q_vocab_examples.txt', 'w') as outfile: 
+        for w in tqdm(questionable): 
+            outfile.write('####### WORD ' + w  + '\n')
+            outfile.write('----------------\n')
+            find_examples(' ' + w + ' ', outfile)
 
 def main(): 
     #count_glosswords_in_tags()
@@ -275,6 +308,7 @@ def main():
     #get_significant_entities()
     #count_tagged_entities()
     #count_glossword_time_place()
+    write_out_examples()
 
 if __name__ == '__main__':
     main()
