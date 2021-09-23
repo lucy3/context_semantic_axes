@@ -18,17 +18,22 @@ POSTS = ROOT + 'data/submissions/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = LOGS + 'gram_counts/'
 
-def load_gram_counts(categories, sqlContext): 
-    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
-    leave_out = []
-    for sr in categories: 
-        if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
-            leave_out.append(sr)
-    reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
-    
-    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
-    df = forum_df.union(reddit_df)
+
+def load_gram_counts_control(sqlContext): 
+    df = sqlContext.read.parquet(WORD_COUNT_DIR + 'control_counts')
     return df
+
+# def load_gram_counts(categories, sqlContext): 
+#     reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
+#     leave_out = []
+#     for sr in categories: 
+#         if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
+#             leave_out.append(sr)
+#     reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
+    
+#     forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
+#     df = forum_df.union(reddit_df)
+#     return df
 
 def month_year_iter(start, end):
     '''
@@ -94,11 +99,8 @@ def get_time_series(word, df, um_totals, bm_totals, vocab_sizes):
     for m in month_year_iter(min_month, max_month): 
         if word_counts[m] > 0: 
             start = True
-        if start:
-            prob = word_counts[m] / totals[m]
-            prob += 1 / max(totals.values())
-            ts.append(math.log(prob, 10))
-#             ts.append(word_counts[m])
+        if start: 
+            ts.append(word_counts[m])
             y.append(m)
     end = len(ts)
     for i in range(len(ts) - 1, -1, -1): 
@@ -115,14 +117,15 @@ def calculate_growth_words(ts):
 def calculate_decline_words(ts): 
     pass
 
+
 def save_word_count_data(sqlContext): 
     '''
     This function is used to save a combined
     word count dataframe (Reddit, excluding Health and Criticism, and forums)
     and total word counts per month (bm_totals, um_totals)
     '''
-    categories = get_sr_cats()
-    df = load_gram_counts(categories, sqlContext)
+#     categories = get_sr_cats()
+    df = load_gram_counts_control(sqlContext)
     unigrams = df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
     bigrams = df.rdd.filter(lambda x: len(x[0].split(' ')) == 2)
     
@@ -147,6 +150,39 @@ def save_word_count_data(sqlContext):
         
     with open(WORD_COUNT_DIR + 'unigram_totals.json', 'w') as outfile: 
         json.dump(um_totals, outfile)
+
+# def save_word_count_data(sqlContext): 
+#     '''
+#     This function is used to save a combined
+#     word count dataframe (Reddit, excluding Health and Criticism, and forums)
+#     and total word counts per month (bm_totals, um_totals)
+#     '''
+#     categories = get_sr_cats()
+#     df = load_gram_counts(categories, sqlContext)
+#     unigrams = df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+#     bigrams = df.rdd.filter(lambda x: len(x[0].split(' ')) == 2)
+    
+#     # {month : total word count}
+#     um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+#     um_totals = Counter(um_totals)
+#     bm_totals = bigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+#     bm_totals = Counter(bm_totals)
+    
+#     # total unique bigrams and unigrams
+#     unigram_size = unigrams.toDF().select(col("word")).distinct().count()
+#     bigram_size = bigrams.toDF().select(col("word")).distinct().count()
+    
+#     with open(WORD_COUNT_DIR + 'unique_counts', 'w') as outfile: 
+#         outfile.write('UNIGRAMS,' + str(unigram_size))
+#         outfile.write('BIGRAMS,' + str(bigram_size))
+    
+#     df.write.mode('overwrite').parquet(WORD_COUNT_DIR + 'combined_counts')
+    
+#     with open(WORD_COUNT_DIR + 'bigram_totals.json', 'w') as outfile: 
+#         json.dump(bm_totals, outfile)
+        
+#     with open(WORD_COUNT_DIR + 'unigram_totals.json', 'w') as outfile: 
+#         json.dump(um_totals, outfile)
 
 def get_word_count_data(sqlContext): 
     '''
@@ -187,7 +223,7 @@ def main():
             'feminists', 'chad', 'bitch', 'females', 'males', 'chicks',
             'police', 'dad', 'victim', 'friend', 'everyone', 'community']
     
-#     words I'm curious about
+    # words I'm curious about
 #     words = ['mras', 'orbiter', 'simps', 'tyrone', 'slayer', 'stacies',
 #              'manginas', 'trannies', 'soyboy', 'becky', 'moids', 'amogs',
 #              'radfems', 'wahmen', 'vikings', 'sloots', 'omegas']
@@ -196,7 +232,7 @@ def main():
         print(w)
         ts, y = get_time_series(w, df, um_totals, bm_totals, vocab_sizes)
         print(ts, y)
-#\         break
+#         break
         #calculate_growth_words(ts)
         #calculate_decline_words(ts)
 
