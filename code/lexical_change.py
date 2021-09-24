@@ -89,7 +89,6 @@ def get_time_series(word, df, um_totals, bm_totals):
             ts.append(0)
         else: 
             prob = word_counts[m] / totals[m]
-            prob += 1 / max(totals.values())
             ts.append(prob)
     return ts
 
@@ -166,14 +165,11 @@ def get_word_count_data(sqlContext, dataset):
         
     return df, um_totals, bm_totals
 
-def get_multiple_time_series(dataset): 
+def get_multiple_time_series(dataset, sqlContext): 
     '''
     @input: 
     - dataset: str that can be "manosphere" or "control" 
     '''
-    conf = SparkConf()
-    sc = SparkContext(conf=conf)
-    sqlContext = SQLContext(sc)
     
     df, um_totals, bm_totals = get_word_count_data(sqlContext, dataset)
 
@@ -199,8 +195,12 @@ def get_multiple_time_series(dataset):
             
         
 def main(): 
-    dataset = 'manosphere'
-    get_multiple_time_series(dataset)
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
+    
+    get_multiple_time_series('manosphere', sqlContext)
+    get_multiple_time_series('control', sqlContext)
 
 if __name__ == '__main__':
     main()
