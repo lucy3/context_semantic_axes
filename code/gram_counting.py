@@ -11,6 +11,7 @@ import os
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
+CONTROL = ROOT + 'data/reddit_control/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = ROOT + 'logs/gram_counts/'
 
@@ -64,6 +65,13 @@ def check_valid_comment(line):
     comment = json.loads(line)
     return 'body' in comment and comment['body'].strip() != '[deleted]' \
             and comment['body'].strip() != '[removed]'
+
+def check_valid_post(line): 
+    '''
+    For Reddit posts
+    '''
+    d = json.loads(line)
+    return 'selftext' in d
 
 def get_n_gramlist(nngramlist, toks, sr, n=2):   
     # stack overflow said this was fastest
@@ -128,6 +136,37 @@ def count_sr():
     outpath = WORD_COUNT_DIR + 'subreddit_counts'
     df.write.mode('overwrite').parquet(outpath)    
     
+def count_control(): 
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    schema = StructType([
+      StructField('word', StringType(), True),
+      StructField('count', IntegerType(), True),
+      StructField('community', StringType(), True),
+      StructField('month', StringType(), True)
+      ])
+    df = sqlContext.createDataFrame([],schema)
+    for filename in os.listdir(CONTROL): 
+        if filename == 'bad_jsons': continue
+        m = filename.replace('RC_', '')
+        file_data = sc.textFile(CONTROL + filename + '/part-00000')
+        cdata = file_data.filter(check_valid_comment)
+        pdata = file_data.filter(check_valid_post)
+        
+        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer))
+        cdata = cdata.map(lambda n: (n, 1))
+        cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
+        
+        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer))
+        pdata = pdata.map(lambda n: (n, 1))
+        data = cdata.union(pdata)
+        
+        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
+        data_df = sqlContext.createDataFrame(data, schema)
+        df = df.union(data_df)
+    outpath = WORD_COUNT_DIR + 'control_counts'
+    df.write.mode('overwrite').parquet(outpath)   
+    
 def get_ngrams_comment_forum(line, tokenizer=None): 
     d = json.loads(line)
     if d['date_post'] is None: 
@@ -169,7 +208,8 @@ def count_forum():
     df.write.mode('overwrite').parquet(outpath)
 
 def main(): 
-    count_sr()
+    count_control()
+    #count_sr()
     #count_forum()
     sc.stop()
 
