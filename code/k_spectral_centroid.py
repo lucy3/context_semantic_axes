@@ -8,23 +8,6 @@ from copy import deepcopy
 
 def main(): 
     
-    def assign_clusters(centroids, cluster_array):
-        '''
-        @input
-        - centroids: a list of arrays of numbers
-        - cluster_array: a list of arrays of numbers (all data points)
-        @output
-        - a list of indices into centroids list
-        '''
-        clusters = []
-        for i in range(len(cluster_array)):
-            distances = []
-            for centroid in centroids:
-                distances.append(d_hat(centroid, cluster_array[i]))
-            cluster = [z for z, val in enumerate(distances) if val==min(distances)]
-            clusters.append(cluster[0])
-        return clusters
-    
     # get time series of 200 words from lexical_change.py
     # load up the .npy that you saved
     
@@ -46,76 +29,50 @@ def main():
     fake_list = [fake1, fake2, fake3, fake4, fake5, fake6, fake7, fake8, fake9, fake10, fake11, fake12]
     # N = number of time series
     N = len(fake_list)
-    for i in range(N): 
-        fake_list[i] = np.array(fake_list[i])
-    
     k = 3
+    fake_list = np.array(fake_list)
     
-    curr_centroids = [None] * k
+    # cluster membership for each time series
+    mem = np.array([random.randint(0, k-1) for idx in range(N)])
     
-    # randomly choose 3 time series to be initial centroids: curr_centroids C
-    # list of 3 time series lists
-    curr_centroids = random.sample(fake_list, 3)
-    
-    # optimal alpha, as defined in the paper, but unsure about this
-    alpha = lambda x, y: (np.dot(x, y)) / (np.linalg.norm(y))**2
+    # optimal alpha, as defined in the paper
+    alpha = lambda x, y: np.dot(x, y) / np.dot(y, y)
     
     # d^ as defined in the paper
     d_hat = lambda x, y: (np.linalg.norm(x - alpha(x,y)*y)) / (np.linalg.norm(x))
-   
-
-    # assign every time series to a centroid based on d^ 
-    # each value in this list is the cluster number of a vector
-    clusters = assign_clusters(curr_centroids, fake_list)
     
-    print(clusters)
+    fraction = lambda x: np.dot(x, np.transpose(x)) / np.linalg.norm(x)**2
     
-    # a mapping from cluster number to vector indices
-    # C^
-    clust_vec_idx = defaultdict(set)
-    for i, j in enumerate(clusters): 
-        clust_vec_idx[j].add(i)
 
-    it = 0
-    while True:
+    for it in range(100):
         print("Iteration", it)
-        print(clust_vec_idx)
-        it += 1
-        old_clust_vec_idx = deepcopy(clust_vec_idx)
-        mu = [None] * k
-        for j in clust_vec_idx:
-            fraction = lambda x: np.dot(x, np.transpose(x)) / np.linalg.norm(x)**2
+        prev_mem = deepcopy(mem)
+        mu = np.zeros((k, fake_list[0].shape[0]))
+        for j in range(k):
             M = np.zeros((fake_list[0].shape[0], fake_list[0].shape[0]))
-            for vec_idx in clust_vec_idx[j]: 
-                vec = fake_list[vec_idx]
-                M += np.identity(vec.shape[0]) - fraction(vec)
+            for vec_idx in range(N): 
+                if mem[vec_idx] == j: 
+                    vec = fake_list[vec_idx]
+                    M += np.identity(vec.shape[0]) - fraction(vec)
             w, v = LA.eig(M)
             idx = np.argmin(w)
-            mu[j] = v[idx]
-            clust_vec_idx[j] = set()
-            
+            if np.sum(v[idx]) < 0: 
+                mu[j] = -v[idx]
+            else: 
+                mu[j] = v[idx]
+
         for vec_idx in range(N): 
             vec = fake_list[vec_idx]
             distances = []
-            for j in range(len(mu)): 
+            for j in range(k): 
                 distances.append(d_hat(vec, mu[j]))
             j_star = np.argmin(distances)
-            clust_vec_idx[j_star].add(vec_idx)
+            mem[vec_idx] = j_star
             
-        same = True
-        for j in old_clust_vec_idx:
-            if old_clust_vec_idx[j] != clust_vec_idx[j]:
-                same = False
-        if same: 
+        print(mem)
+        if np.linalg.norm(prev_mem - mem) == 0: 
             break
-            
-            
-            
 
-
-            
-    # to debug, you can print out cluster assignments in every iteration
-    # if things still seem broken, can make fake data and cluster that
     
 
 if __name__ == '__main__':
