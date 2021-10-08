@@ -4,10 +4,9 @@ from collections import defaultdict
 from numpy import linalg as LA
 from copy import deepcopy
 
-# ignore q!
-
 def main(): 
     
+    random.seed(0)
     # get time series of 200 words from lexical_change.py
     # load up the .npy that you saved
     
@@ -41,25 +40,31 @@ def main():
     # d^ as defined in the paper
     d_hat = lambda x, y: (np.linalg.norm(x - alpha(x,y)*y)) / (np.linalg.norm(x))
     
-    fraction = lambda x: np.dot(x, np.transpose(x)) / np.linalg.norm(x)**2
+#     fraction = lambda x: np.dot(x, np.transpose(x)) / np.linalg.norm(x)**2
     
-
     for it in range(100):
         print("Iteration", it)
         prev_mem = deepcopy(mem)
         mu = np.zeros((k, fake_list[0].shape[0]))
         for j in range(k):
-            M = np.zeros((fake_list[0].shape[0], fake_list[0].shape[0]))
+            A = []
             for vec_idx in range(N): 
                 if mem[vec_idx] == j: 
                     vec = fake_list[vec_idx]
-                    M += np.identity(vec.shape[0]) - fraction(vec)
+                    A.append(vec)
+            A = np.array(A)
+            if A.shape[0] == 0: 
+                mu[j] = np.zeros(fake_list[0].shape[0])
+                continue
+            interm = np.sqrt(np.sum(np.square(A), 1))
+            B = np.divide(A, np.tile(interm, (A.shape[1], 1)).transpose())
+            M = np.matmul(np.transpose(B), B) - A.shape[0]*np.identity(A.shape[1])
             w, v = LA.eig(M)
-            idx = np.argmin(w)
-            if np.sum(v[idx]) < 0: 
-                mu[j] = -v[idx]
+            idx = np.argmin(np.absolute(w))
+            if np.sum(v[:,idx]) < 0: 
+                mu[j] = -v[:,idx]
             else: 
-                mu[j] = v[idx]
+                mu[j] = v[:,idx]
 
         for vec_idx in range(N): 
             vec = fake_list[vec_idx]
@@ -69,10 +74,9 @@ def main():
             j_star = np.argmin(distances)
             mem[vec_idx] = j_star
             
-        print(mem)
         if np.linalg.norm(prev_mem - mem) == 0: 
             break
-
+    print(mem)
     
 
 if __name__ == '__main__':
