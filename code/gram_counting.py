@@ -79,7 +79,7 @@ def get_n_gramlist(nngramlist, toks, sr, n=2):
         nngramlist.append((sr, ' '.join(s)))                
     return nngramlist
 
-def get_ngrams_comment(line, tokenizer=None): 
+def get_ngrams_comment(line, tokenizer=None, per_comment=True): 
     '''
     Reddit comment
     '''
@@ -88,9 +88,11 @@ def get_ngrams_comment(line, tokenizer=None):
     toks = tokenizer.tokenize(d['body'])
     all_grams = [(sr, i) for i in toks]
     all_grams = get_n_gramlist(all_grams, toks, sr, 2)
+    if per_comment: 
+        all_grams = list(set(all_grams))
     return all_grams
 
-def get_ngrams_post(line, tokenizer=None): 
+def get_ngrams_post(line, tokenizer=None, per_comment=True): 
     '''
     Reddit post
     '''
@@ -100,9 +102,11 @@ def get_ngrams_post(line, tokenizer=None):
     toks = tokenizer.tokenize(d['selftext'])
     all_grams = [(sr, i) for i in toks]
     all_grams = get_n_gramlist(all_grams, toks, sr, 2)
+    if per_comment: 
+        all_grams = list(set(all_grams))
     return all_grams
 
-def count_sr(): 
+def count_sr(per_comment=True): 
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
       StructField('word', StringType(), True),
@@ -116,7 +120,7 @@ def count_sr():
         m = filename.replace('RC_', '')
         cdata = sc.textFile(COMS + filename + '/part-00000')
         cdata = cdata.filter(check_valid_comment)
-        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer))
+        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer, per_comment=per_comment))
         cdata = cdata.map(lambda n: (n, 1))
         cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
         
@@ -125,7 +129,7 @@ def count_sr():
         else: 
             post_path = SUBS + 'RS_v2_' + m + '/part-00000'
         pdata = sc.textFile(post_path)
-        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer))
+        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer, per_comment=per_comment))
         pdata = pdata.map(lambda n: (n, 1))
         data = cdata.union(pdata)
         
@@ -133,10 +137,18 @@ def count_sr():
         data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
         data_df = sqlContext.createDataFrame(data, schema)
         df = df.union(data_df)
-    outpath = WORD_COUNT_DIR + 'subreddit_counts'
+    if per_comment: 
+        outpath = WORD_COUNT_DIR + 'subreddit_counts_set'
+    else: 
+        outpath = WORD_COUNT_DIR + 'subreddit_counts'
     df.write.mode('overwrite').parquet(outpath)    
     
-def count_control(): 
+def count_control(per_comment=True):
+    '''
+    @inputs: 
+    - per_comment: flag, where if False, counts all instances of a word 
+    in a comment, otherwise if True, counts each word just once per comment
+    ''' 
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
       StructField('word', StringType(), True),
@@ -152,11 +164,11 @@ def count_control():
         cdata = file_data.filter(check_valid_comment)
         pdata = file_data.filter(check_valid_post)
         
-        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer))
+        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer, per_comment=per_comment))
         cdata = cdata.map(lambda n: (n, 1))
         cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
         
-        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer))
+        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer, per_comment=per_comment))
         pdata = pdata.map(lambda n: (n, 1))
         data = cdata.union(pdata)
         
@@ -164,10 +176,13 @@ def count_control():
         data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
         data_df = sqlContext.createDataFrame(data, schema)
         df = df.union(data_df)
-    outpath = WORD_COUNT_DIR + 'control_counts'
+    if per_comment:
+        outpath = WORD_COUNT_DIR + 'control_counts_set'
+    else: 
+        outpath = WORD_COUNT_DIR + 'control_counts'
     df.write.mode('overwrite').parquet(outpath)   
     
-def get_ngrams_comment_forum(line, tokenizer=None): 
+def get_ngrams_comment_forum(line, tokenizer=None, per_comment=True): 
     d = json.loads(line)
     if d['date_post'] is None: 
         year = "None"
@@ -180,9 +195,11 @@ def get_ngrams_comment_forum(line, tokenizer=None):
     toks = tokenizer.tokenize(d['text_post'])
     all_grams = [(date_month, i) for i in toks]
     all_grams = get_n_gramlist(all_grams, toks, date_month, 2)
+    if per_comment: 
+        all_grams = list(set(all_grams))
     return all_grams
     
-def count_forum(): 
+def count_forum(per_comment=True): 
     '''
     We attach "FORUM_" the beginning of the community name
     to avoid incels the forum and incels the subreddit from clashing
@@ -198,19 +215,22 @@ def count_forum():
     df = sqlContext.createDataFrame([],schema)
     for filename in os.listdir(FORUMS):
         data = sc.textFile(FORUMS + filename)
-        data = data.flatMap(partial(get_ngrams_comment_forum, tokenizer=tokenizer))
+        data = data.flatMap(partial(get_ngrams_comment_forum, tokenizer=tokenizer, per_comment=per_comment))
         data = data.map(lambda n: (n, 1))
         data = data.reduceByKey(lambda n1, n2: n1 + n2)
         data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community='FORUM_' + filename, month=tup[0][0]))
         data_df = sqlContext.createDataFrame(data, schema)
         df = df.union(data_df)
-    outpath = WORD_COUNT_DIR + 'forum_counts'
+    if per_comment: 
+        outpath = WORD_COUNT_DIR + 'forum_counts_set'
+    else: 
+        outpath = WORD_COUNT_DIR + 'forum_counts'
     df.write.mode('overwrite').parquet(outpath)
 
 def main(): 
     count_control()
-    #count_sr()
-    #count_forum()
+    count_sr()
+    count_forum()
     sc.stop()
 
 if __name__ == "__main__":
