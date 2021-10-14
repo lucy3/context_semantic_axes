@@ -10,6 +10,7 @@ from scipy.stats import spearmanr
 from collections import Counter
 import json
 import numpy as np
+import csv
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
@@ -19,16 +20,17 @@ POSTS = ROOT + 'data/submissions/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = LOGS + 'gram_counts/'
 TIME_SERIES_DIR = LOGS + 'time_series/'
+ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 
 def load_gram_counts(categories, sqlContext): 
-    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
+    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts_set')
     leave_out = []
     for sr in categories: 
         if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
             leave_out.append(sr)
     reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
     
-    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
+    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts_set')
     df = forum_df.union(reddit_df)
     return df
 
@@ -99,20 +101,20 @@ def save_word_count_data(sqlContext, dataset):
     and total word counts per month (bm_totals, um_totals)
     '''
     if dataset == 'manosphere': 
-        parquet_file = WORD_COUNT_DIR + 'combined_counts'
-        bigram_file = WORD_COUNT_DIR + 'bigram_totals.json'
-        unigram_file = WORD_COUNT_DIR + 'unigram_totals.json'
-        unique_file = WORD_COUNT_DIR + 'unique_counts'
+        parquet_file = WORD_COUNT_DIR + 'combined_counts_set'
+        bigram_file = WORD_COUNT_DIR + 'bigram_totals_set.json'
+        unigram_file = WORD_COUNT_DIR + 'unigram_totals_set.json'
+        unique_file = WORD_COUNT_DIR + 'unique_counts_set'
         
         categories = get_sr_cats()
         df = load_gram_counts(categories, sqlContext)
         df.write.mode('overwrite').parquet(parquet_file)
         
     elif dataset == 'control': 
-        parquet_file = WORD_COUNT_DIR + 'control_counts'
-        bigram_file = WORD_COUNT_DIR + 'bigram_totals_control.json'
-        unigram_file = WORD_COUNT_DIR + 'unigram_totals_control.json'
-        unique_file = WORD_COUNT_DIR + 'unique_counts_control'
+        parquet_file = WORD_COUNT_DIR + 'control_counts_set'
+        bigram_file = WORD_COUNT_DIR + 'bigram_totals_control_set.json'
+        unigram_file = WORD_COUNT_DIR + 'unigram_totals_control_set.json'
+        unique_file = WORD_COUNT_DIR + 'unique_counts_control_set'
         
         df = sqlContext.read.parquet(parquet_file)
     
@@ -145,15 +147,15 @@ def get_word_count_data(sqlContext, dataset):
     precalculated by save_word_count_data() above. 
     '''
     if dataset == 'manosphere': 
-        parquet_file = WORD_COUNT_DIR + 'combined_counts'
-        bigram_file = WORD_COUNT_DIR + 'bigram_totals.json'
-        unigram_file = WORD_COUNT_DIR + 'unigram_totals.json'
-        unique_file = WORD_COUNT_DIR + 'unique_counts'
+        parquet_file = WORD_COUNT_DIR + 'combined_counts_set'
+        bigram_file = WORD_COUNT_DIR + 'bigram_totals_set.json'
+        unigram_file = WORD_COUNT_DIR + 'unigram_totals_set.json'
+        unique_file = WORD_COUNT_DIR + 'unique_counts_set'
     elif dataset == 'control': 
-        parquet_file = WORD_COUNT_DIR + 'control_counts'
-        bigram_file = WORD_COUNT_DIR + 'bigram_totals_control.json'
-        unigram_file = WORD_COUNT_DIR + 'unigram_totals_control.json'
-        unique_file = WORD_COUNT_DIR + 'unique_counts_control'
+        parquet_file = WORD_COUNT_DIR + 'control_counts_set'
+        bigram_file = WORD_COUNT_DIR + 'bigram_totals_control_set.json'
+        unigram_file = WORD_COUNT_DIR + 'unigram_totals_control_set.json'
+        unique_file = WORD_COUNT_DIR + 'unique_counts_control_set'
         
     df = sqlContext.read.parquet(parquet_file)
     with open(bigram_file, 'r') as infile: 
@@ -174,30 +176,41 @@ def get_multiple_time_series(dataset, sqlContext):
     df, um_totals, bm_totals = get_word_count_data(sqlContext, dataset)
 
     # a few from top 50
-    words = ['women', 'men', 'guys', 'girls', 'mgtow', 'incel', 
-            'feminists', 'chad', 'bitch', 'females', 'males', 'chicks',
-            'police', 'dad', 'victim', 'friend', 'everyone', 'community',
-             'mras', 'orbiter', 'simps', 'tyrone', 'slayer', 'stacies',
-             'manginas', 'trannies', 'soyboy', 'becky', 'moids', 'amogs',
-             'radfems', 'wahmen', 'vikings', 'sloots', 'omegas']
+#     words = ['women', 'men', 'guys', 'girls', 'mgtow', 'incel', 
+#             'feminists', 'chad', 'bitch', 'females', 'males', 'chicks',
+#             'police', 'dad', 'victim', 'friend', 'everyone', 'community',
+#              'mras', 'orbiter', 'simps', 'tyrone', 'slayer', 'stacies',
+#              'manginas', 'trannies', 'soyboy', 'becky', 'moids', 'amogs',
+#              'radfems', 'wahmen', 'vikings', 'sloots', 'omegas']
+
+    words = []
+    with open(ANN_FILE, 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader: 
+            if row['keep'] == 'Y': 
+                words.append(row['entity'])
+            if len(words) == 200: break
     
     # filter the count dataframe just to the words we care about
     word_df = df.filter(df.word.isin(words))
 
     matrix = []
-    with open(TIME_SERIES_DIR + 'vocab_' + dataset + '.txt', 'w') as outfile: 
+    with open(TIME_SERIES_DIR + 'vocab_' + dataset + '_set.txt', 'w') as outfile: 
         for w in words: 
             outfile.write(w + '\n')
             ts = get_time_series(w, word_df, um_totals, bm_totals)
             matrix.append(ts)
     matrix = np.array(matrix)
-    np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '.npy', matrix)
+    np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy', matrix)
             
         
 def main(): 
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
+    
+    #save_word_count_data(sqlContext, 'manosphere')
+    #save_word_count_data(sqlContext, 'control')
     
     get_multiple_time_series('manosphere', sqlContext)
     get_multiple_time_series('control', sqlContext)
