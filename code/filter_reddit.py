@@ -25,6 +25,8 @@ UD = '/mnt/data0/corpora/urban_dictionary/UD2019/Oct19/all_definitions.dat'
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
+SUBS = ROOT + 'data/submissions/'
+COMS = ROOT + 'data/comments/'
 
 def unpack_file(d, f):
     start = time.time()
@@ -224,18 +226,88 @@ def sample_reddit_control():
             pack_file(IN_S, sub_input) 
             pack_file(IN_C, com_input) 
         print("TIME:", time.time() - start)
+        
+def extract_subreddits_main(): 
+    '''
+    Get relevant subreddits for comments and posts.
+    '''
+    in_d = '/mnt/data0/corpora/reddit/comments/'
+    out_d = '/mnt/data0/lucy/manosphere/data/comments/'
+    extract_relevant_subreddits(in_d, out_d)
+    in_d = '/mnt/data0/corpora/reddit/submissions/'
+    out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
+    extract_relevant_subreddits(in_d, out_d)
+    
+def check_duplicates_main(): 
+    '''
+    In the downloaded pushshift data, a few months
+    appear twice. This is to check that they are the same.
+    '''
+    check_duplicate_months(IN_C, [('RC_2018-10.xz', 'RC_2018-10.zst')])
+    check_duplicate_months(IN_S, [('RS_2017-11.bz2', 'RS_2017-11.xz')])
+    check_duplicate_months(IN_S, [('RS_2017-07.bz2', 'RS_2017-07.xz')])
+    
+def get_n_gramlist(nngramlist, toks, author, n=2):   
+    # stack overflow said this was fastest
+    for s in ngrams(toks,n=n):        
+        nngramlist.append((author, ' '.join(s)))                
+    return nngramlist
+    
+def get_ngrams(line): 
+    '''
+    Gets 10-grams for each post/comment.
+    This is using white-space splitting because it is faster and
+    tokenization should not affect things if there are large amounts 
+    of copied text between posts/comments
+    '''
+    d = json.loads(line)
+    author = d['author'].lower()
+    if 'body' in d: 
+        toks = d['body'].split()
+    elif 'selftext' in d: 
+        toks = d['selftext'].split()
+    else: 
+        return []
+    all_grams = get_n_gramlist([], toks, author, 10)
+    all_grams = list(set(all_grams))
+    return all_grams
+    
+def detect_bots(): 
+    '''
+    This function finds users who tend to write
+    the same 10-gram over and over (some bots customize
+    responses to a post so we splice up their comments
+    to get a better idea of repetition)
+    '''
+    bot_users = set()
+    for filename in os.listdir(COMS): 
+        if filename == 'bad_jsons': continue
+        m = filename.replace('RC_', '')
+        cdata = sc.textFile(COMS + filename + '/part-00000')
+        cdata = cdata.filter(check_valid_comment)
+        cdata = cdata.flatMap(get_ngrams)
+        cdata = cdata.map(lambda n: (n, 1))
+        cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
+        
+        if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
+            post_path = SUBS + 'RS_' + m + '/part-00000'
+        else: 
+            post_path = SUBS + 'RS_v2_' + m + '/part-00000'
+        pdata = sc.textFile(post_path)
+        pdata = pdata.flatMap(get_ngrams)
+        pdata = pdata.map(lambda n: (n, 1))
+        data = cdata.union(pdata)
+        
+        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        data = data.filter(lambda tup: tup[1] > 20) # extensive repetition
+        data = data.map(lambda n: n[0][0]) # user
+        bot_users.update(data.collect())
+    with open(LOGS + 'reddit_bots.txt', 'w') as outfile: 
+        for user in bot_users: 
+            outfile.write(user + '\n')
 
 def main(): 
-    #check_duplicate_months(IN_C, [('RC_2018-10.xz', 'RC_2018-10.zst')])
-    #check_duplicate_months(IN_S, [('RS_2017-11.bz2', 'RS_2017-11.xz')])
-    #check_duplicate_months(IN_S, [('RS_2017-07.bz2', 'RS_2017-07.xz')])
-#     in_d = '/mnt/data0/corpora/reddit/comments/'
-#     out_d = '/mnt/data0/lucy/manosphere/data/comments/'
-#     extract_relevant_subreddits(in_d, out_d)
-#     in_d = '/mnt/data0/corpora/reddit/submissions/'
-#     out_d = '/mnt/data0/lucy/manosphere/data/submissions/'
-#     extract_relevant_subreddits(in_d, out_d)
-    sample_reddit_control()
+    detect_bots()
     sc.stop()
 
 if __name__ == '__main__':
