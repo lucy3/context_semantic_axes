@@ -19,7 +19,7 @@ def main():
     matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy')
     # N = number of time series
     N = matrix.shape[0]
-    k = 4
+    k = 6
     
     # cluster membership for each time series
     mem = np.array([random.randint(0, k-1) for idx in range(N)])

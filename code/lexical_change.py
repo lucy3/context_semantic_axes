@@ -189,7 +189,6 @@ def get_multiple_time_series(dataset, sqlContext):
         for row in reader: 
             if row['keep'] == 'Y': 
                 words.append(row['entity'])
-            if len(words) == 200: break
     
     # filter the count dataframe just to the words we care about
     word_df = df.filter(df.word.isin(words))
