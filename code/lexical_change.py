@@ -1,9 +1,9 @@
 """
 Find growth and decline words 
 """
-from pyspark import SparkConf, SparkContext
-from pyspark.sql import SQLContext
-from pyspark.sql.functions import col
+#from pyspark import SparkConf, SparkContext
+#from pyspark.sql import SQLContext
+#from pyspark.sql.functions import col
 from helpers import get_sr_cats
 import math
 from scipy.stats import spearmanr
@@ -12,7 +12,7 @@ import json
 import numpy as np
 import csv
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/data0/lucy/manosphere/'
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
 LOGS = ROOT + 'logs/'
 COMMENTS = ROOT + 'data/comments/'
@@ -175,14 +175,6 @@ def get_multiple_time_series(dataset, sqlContext):
     
     df, um_totals, bm_totals = get_word_count_data(sqlContext, dataset)
 
-    # a few from top 50
-#     words = ['women', 'men', 'guys', 'girls', 'mgtow', 'incel', 
-#             'feminists', 'chad', 'bitch', 'females', 'males', 'chicks',
-#             'police', 'dad', 'victim', 'friend', 'everyone', 'community',
-#              'mras', 'orbiter', 'simps', 'tyrone', 'slayer', 'stacies',
-#              'manginas', 'trannies', 'soyboy', 'becky', 'moids', 'amogs',
-#              'radfems', 'wahmen', 'vikings', 'sloots', 'omegas']
-
     words = []
     with open(ANN_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -202,17 +194,29 @@ def get_multiple_time_series(dataset, sqlContext):
     matrix = np.array(matrix)
     np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy', matrix)
             
-        
+def smooth_time_series(dataset): 
+    matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy')
+    kernel_size = 3
+    kernel = np.ones(kernel_size) / kernel_size
+    for i in range(matrix.shape[0]): 
+        smoothed = np.convolve(matrix[i], kernel, mode='valid')
+        smoothed = np.concatenate((matrix[i][:1], smoothed, matrix[i][-1:]))
+        assert smoothed.shape == matrix[i].shape
+        matrix[i] = smoothed
+    np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy', matrix) 
+    
 def main(): 
-    conf = SparkConf()
-    sc = SparkContext(conf=conf)
-    sqlContext = SQLContext(sc)
+    #conf = SparkConf()
+    #sc = SparkContext(conf=conf)
+    #sqlContext = SQLContext(sc)
     
     #save_word_count_data(sqlContext, 'manosphere')
     #save_word_count_data(sqlContext, 'control')
     
-    get_multiple_time_series('manosphere', sqlContext)
-    get_multiple_time_series('control', sqlContext)
+    #get_multiple_time_series('manosphere', sqlContext)
+    #get_multiple_time_series('control', sqlContext)
+    
+    smooth_time_series('manosphere') 
 
 if __name__ == '__main__':
     main()
