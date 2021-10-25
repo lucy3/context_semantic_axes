@@ -15,6 +15,7 @@ import os
 import csv 
 from collections import Counter
 from helpers import get_sr_cats
+from nltk import ngrams
 
 conf = SparkConf()
 sc = SparkContext(conf=conf)
@@ -22,7 +23,8 @@ sc = SparkContext(conf=conf)
 IN_S = '/mnt/data0/corpora/reddit/submissions/'
 IN_C = '/mnt/data0/corpora/reddit/comments/'
 UD = '/mnt/data0/corpora/urban_dictionary/UD2019/Oct19/all_definitions.dat'
-ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 SUBS = ROOT + 'data/submissions/'
@@ -271,6 +273,14 @@ def get_ngrams(line):
     all_grams = get_n_gramlist([], toks, author, 10)
     all_grams = list(set(all_grams))
     return all_grams
+
+def check_valid_comment(line): 
+    '''
+    For Reddit comments
+    '''
+    comment = json.loads(line)
+    return 'body' in comment and comment['body'].strip() != '[deleted]' \
+            and comment['body'].strip() != '[removed]'
     
 def detect_bots(): 
     '''
@@ -279,7 +289,7 @@ def detect_bots():
     responses to a post so we splice up their comments
     to get a better idea of repetition)
     '''
-    bot_users = set()
+    all_data = sc.emptyRDD()
     for filename in os.listdir(COMS): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
@@ -297,11 +307,13 @@ def detect_bots():
         pdata = pdata.flatMap(get_ngrams)
         pdata = pdata.map(lambda n: (n, 1))
         data = cdata.union(pdata)
-        
+
         data = data.reduceByKey(lambda n1, n2: n1 + n2)
-        data = data.filter(lambda tup: tup[1] > 20) # extensive repetition
-        data = data.map(lambda n: n[0][0]) # user
-        bot_users.update(data.collect())
+        all_data = all_data.union(data)
+        all_data = all_data.reduceByKey(lambda n1, n2: n1 + n2)
+    all_data = all_data.filter(lambda tup: tup[1] > 100) # extensive repetition
+    all_data = all_data.map(lambda n: n[0][0]) # user
+    bot_users = set(all_data.collect())
     with open(LOGS + 'reddit_bots.txt', 'w') as outfile: 
         for user in bot_users: 
             outfile.write(user + '\n')
