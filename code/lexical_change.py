@@ -12,7 +12,7 @@ import json
 import numpy as np
 import csv
 
-ROOT = '/data0/lucy/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
 #ROOT = '/global/scratch/lucy3_li/manosphere/'
 LOGS = ROOT + 'logs/'
 COMMENTS = ROOT + 'data/comments/'
@@ -196,11 +196,11 @@ def get_multiple_time_series(dataset, sqlContext):
             
 def smooth_time_series(dataset): 
     matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy')
-    kernel_size = 3
+    kernel_size = 3 # make sure to modify the code below if you change this
     kernel = np.ones(kernel_size) / kernel_size
     for i in range(matrix.shape[0]): 
         smoothed = np.convolve(matrix[i], kernel, mode='valid')
-        smoothed = np.concatenate((matrix[i][:1], smoothed, matrix[i][-1:]))
+        smoothed = np.concatenate(([matrix[i][0]/2 + matrix[i][1]/2], smoothed, [matrix[i][-1]/2 + matrix[i][-2]/2]))
         assert smoothed.shape == matrix[i].shape
         matrix[i] = smoothed
     np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy', matrix) 
@@ -216,7 +216,8 @@ def main():
     #get_multiple_time_series('manosphere', sqlContext)
     #get_multiple_time_series('control', sqlContext)
     
-    smooth_time_series('manosphere') 
+    smooth_time_series('manosphere')
+    #smooth_time_series('control') 
 
 if __name__ == '__main__':
     main()

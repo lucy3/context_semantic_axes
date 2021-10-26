@@ -16,10 +16,10 @@ def main():
     with open(TIME_SERIES_DIR + 'vocab_' + dataset + '_set.txt', 'r') as infile: 
             for line in infile: 
                 word_list.append(line.strip())
-    matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_set.npy')
+    matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy')
     # N = number of time series
     N = matrix.shape[0]
-    k = 6
+    k = 4
     
     # cluster membership for each time series
     mem = np.array([random.randint(0, k-1) for idx in range(N)])
@@ -64,7 +64,7 @@ def main():
             
         if np.linalg.norm(prev_mem - mem) == 0: 
             break
-    np.save(TIME_SERIES_DIR + 'clusters_set.npy', mem)
+    np.save(TIME_SERIES_DIR + 'clusters_set_' + str(k) + '.npy', mem)
     
 
 if __name__ == '__main__':
