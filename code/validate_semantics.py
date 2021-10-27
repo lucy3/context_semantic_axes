@@ -51,6 +51,16 @@ def prep_datasets():
     nrc_vad()
     nrc_emotion()
     
+def get_axes(): 
+    axes_file = DATA + 'semantics/732_semaxis_axes.tsv'
+    axes = []
+    with open(axes_file, 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t') 
+            axes.append(contents[0])
+            axes.append(contents[1])
+    return axes
+    
 def type_embeddings():
     with open(DATA + 'semantics/cleaned/nrc_vad.json', 'r') as infile:
         vad = json.load(infile)
@@ -61,13 +71,14 @@ def type_embeddings():
             
     antonyms = ['dominant', 'submissive', 'active', 'passive', 'positive', 'negative', 
                 'great', 'terrible', 'excited', 'unexcited', 'worthy', 'useless']
+    axes = get_axes()
     
     glove_vecs = {}
     with open(GLOVE + 'glove.6B.300d.txt', 'r') as infile:
         for line in infile: 
             contents = line.split()
             word = contents[0]
-            if word in vocab or word in antonyms: 
+            if word in vocab or word in antonyms or word in axes: 
                 vec = np.array([float(i) for i in contents[1:]])
                 glove_vecs[word] = vec
                 
@@ -75,6 +86,19 @@ def type_embeddings():
     for adj in antonyms: 
         adj_matrix.append(glove_vecs[adj])
     adj_matrix = np.array(adj_matrix)
+    
+    axes_matrix = []
+    axes_order = []
+    for i, w in enumerate(axes): 
+        if i % 2 == 0 and w in glove_vecs and axes[i+1] in glove_vecs:
+            axes_matrix.append(glove_vecs[w])
+            axes_matrix.append(glove_vecs[axes[i+1]])
+            axes_order.append(w)
+            axes_order.append(axes[i+1])
+            
+    with open(LOGS + 'semantics_val/axes_order.txt', 'w') as outfile: 
+        for w in axes_order: 
+            outfile.write(w + '\n')
                 
     for c in vad: 
         word_matrix = []
@@ -101,6 +125,9 @@ def type_embeddings():
                 
         t_adj_matrix = clf.transform(adj_matrix)
         np.save(LOGS + 'semantics_val/' + c + '_adj.npy', t_adj_matrix)
+        
+        t_axes_matrix = clf.transform(axes_matrix)
+        np.save(LOGS + 'semantics_val/' + c + '_axes.npy', t_axes_matrix)
     
 def main(): 
     prep_datasets()
