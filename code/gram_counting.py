@@ -106,7 +106,19 @@ def get_ngrams_post(line, tokenizer=None, per_comment=True):
         all_grams = list(set(all_grams))
     return all_grams
 
+def get_bot_set(): 
+    bots = set()
+    with open(ROOT + 'logs/reddit_bots.txt', 'r') as infile: 
+        for line in infile: 
+            bots.add(line.strip())
+    return bots
+    
+def remove_bots(line, bot_set=set()): 
+    d = json.loads(line)
+    return 'author' in d and d['author'] not in bot_set
+
 def count_sr(per_comment=True): 
+    bots = get_bot_set()
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
       StructField('word', StringType(), True),
@@ -115,11 +127,13 @@ def count_sr(per_comment=True):
       StructField('month', StringType(), True)
       ])
     df = sqlContext.createDataFrame([],schema)
+    
     for filename in os.listdir(COMS): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
         cdata = sc.textFile(COMS + filename + '/part-00000')
         cdata = cdata.filter(check_valid_comment)
+        cdata = cdata.filter(partial(remove_bots, bot_set=bots))
         cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer, per_comment=per_comment))
         cdata = cdata.map(lambda n: (n, 1))
         cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
@@ -129,6 +143,7 @@ def count_sr(per_comment=True):
         else: 
             post_path = SUBS + 'RS_v2_' + m + '/part-00000'
         pdata = sc.textFile(post_path)
+        pdata = pdata.filter(partial(remove_bots, bot_set=bots))
         pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer, per_comment=per_comment))
         pdata = pdata.map(lambda n: (n, 1))
         data = cdata.union(pdata)
@@ -149,6 +164,7 @@ def count_control(per_comment=True):
     - per_comment: flag, where if False, counts all instances of a word 
     in a comment, otherwise if True, counts each word just once per comment
     ''' 
+    bots = get_bot_set()
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
       StructField('word', StringType(), True),
@@ -157,10 +173,12 @@ def count_control(per_comment=True):
       StructField('month', StringType(), True)
       ])
     df = sqlContext.createDataFrame([],schema)
+    
     for filename in os.listdir(CONTROL): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
         file_data = sc.textFile(CONTROL + filename + '/part-00000')
+        file_data = file_data.filter(partial(remove_bots, bot_set=bots))
         cdata = file_data.filter(check_valid_comment)
         pdata = file_data.filter(check_valid_post)
         
@@ -228,9 +246,11 @@ def count_forum(per_comment=True):
     df.write.mode('overwrite').parquet(outpath)
 
 def main(): 
+    count_control(per_comment=False)
+    count_sr(per_comment=False)
     count_control()
     count_sr()
-    count_forum()
+    #count_forum()
     sc.stop()
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
+CONTROL = ROOT + 'data/reddit_control/'
 
 def unpack_file(d, f):
     start = time.time()
@@ -263,6 +264,7 @@ def get_ngrams(line):
     of copied text between posts/comments
     '''
     d = json.loads(line)
+    if 'author' not in d: return []
     author = d['author'].lower()
     if 'body' in d: 
         toks = d['body'].split()
@@ -281,6 +283,13 @@ def check_valid_comment(line):
     comment = json.loads(line)
     return 'body' in comment and comment['body'].strip() != '[deleted]' \
             and comment['body'].strip() != '[removed]'
+
+def check_valid_post(line): 
+    '''
+    For Reddit posts
+    '''
+    d = json.loads(line)
+    return 'selftext' in d
     
 def detect_bots(): 
     '''
@@ -289,31 +298,34 @@ def detect_bots():
     responses to a post so we splice up their comments
     to get a better idea of repetition)
     '''
-    all_data = sc.emptyRDD()
+    bot_users = set()
     for filename in os.listdir(COMS): 
         if filename == 'bad_jsons': continue
         m = filename.replace('RC_', '')
         cdata = sc.textFile(COMS + filename + '/part-00000')
         cdata = cdata.filter(check_valid_comment)
-        cdata = cdata.flatMap(get_ngrams)
-        cdata = cdata.map(lambda n: (n, 1))
-        cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
+        cdata = cdata.flatMap(get_ngrams).map(lambda n: (n, 1)).reduceByKey(lambda n1, n2: n1 + n2)
         
         if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
             post_path = SUBS + 'RS_' + m + '/part-00000'
         else: 
             post_path = SUBS + 'RS_v2_' + m + '/part-00000'
         pdata = sc.textFile(post_path)
-        pdata = pdata.flatMap(get_ngrams)
-        pdata = pdata.map(lambda n: (n, 1))
-        data = cdata.union(pdata)
+        pdata = pdata.flatMap(get_ngrams).map(lambda n: (n, 1)).reduceByKey(lambda n1, n2: n1 + n2)
+        data = cdata.union(pdata).reduceByKey(lambda n1, n2: n1 + n2)
 
-        data = data.reduceByKey(lambda n1, n2: n1 + n2)
-        all_data = all_data.union(data)
-        all_data = all_data.reduceByKey(lambda n1, n2: n1 + n2)
-    all_data = all_data.filter(lambda tup: tup[1] > 100) # extensive repetition
-    all_data = all_data.map(lambda n: n[0][0]) # user
-    bot_users = set(all_data.collect())
+        file_data = sc.textFile(CONTROL + m + '/part-00000')
+        cdata = file_data.filter(check_valid_comment)
+        pdata = file_data.filter(check_valid_post)
+        cdata = cdata.flatMap(get_ngrams).map(lambda n: (n, 1)).reduceByKey(lambda n1, n2: n1 + n2)
+        pdata = pdata.flatMap(get_ngrams).map(lambda n: (n, 1)).reduceByKey(lambda n1, n2: n1 + n2)
+        data_control = cdata.union(pdata).reduceByKey(lambda n1, n2: n1 + n2)
+
+        data = data.union(data_control).reduceByKey(lambda n1, n2: n1 + n2)
+        
+        data = data.filter(lambda tup: tup[1] > 100) # extensive repetition
+        data = data.map(lambda n: n[0][0]) # user
+        bot_users.update(data.collect())
     with open(LOGS + 'reddit_bots.txt', 'w') as outfile: 
         for user in bot_users: 
             outfile.write(user + '\n')
