@@ -8,7 +8,7 @@ ROOT = '/mnt/data0/lucy/manosphere/'
 LOGS = ROOT + 'logs/'
 TIME_SERIES_DIR = LOGS + 'time_series/'
 
-def main(): 
+def cluster_time_series(k): 
     
     random.seed(0)
     dataset = 'manosphere'
@@ -19,7 +19,6 @@ def main():
     matrix = np.load(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy')
     # N = number of time series
     N = matrix.shape[0]
-    k = 4
     
     # cluster membership for each time series
     mem = np.array([random.randint(0, k-1) for idx in range(N)])
@@ -66,6 +65,10 @@ def main():
             break
     np.save(TIME_SERIES_DIR + 'clusters_set_' + str(k) + '.npy', mem)
     
+def main(): 
+    cluster_time_series(4)
+    cluster_time_series(6)
+    cluster_time_series(8)
 
 if __name__ == '__main__':
     main()

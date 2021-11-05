@@ -1,9 +1,9 @@
 """
 Find growth and decline words 
 """
-#from pyspark import SparkConf, SparkContext
-#from pyspark.sql import SQLContext
-#from pyspark.sql.functions import col
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import SQLContext
+from pyspark.sql.functions import col
 from helpers import get_sr_cats
 import math
 from scipy.stats import spearmanr
@@ -206,18 +206,15 @@ def smooth_time_series(dataset):
     np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy', matrix) 
     
 def main(): 
-    #conf = SparkConf()
-    #sc = SparkContext(conf=conf)
-    #sqlContext = SQLContext(sc)
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
     
-    #save_word_count_data(sqlContext, 'manosphere')
-    #save_word_count_data(sqlContext, 'control')
+    save_word_count_data(sqlContext, 'manosphere')
+    save_word_count_data(sqlContext, 'control')
     
-    #get_multiple_time_series('manosphere', sqlContext)
-    #get_multiple_time_series('control', sqlContext)
-    
+    get_multiple_time_series('manosphere', sqlContext)
     smooth_time_series('manosphere')
-    #smooth_time_series('control') 
 
 if __name__ == '__main__':
     main()
