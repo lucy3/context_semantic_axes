@@ -11,6 +11,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import csv
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from scipy import spatial
+import math
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -366,12 +368,76 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False):
                 
     with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis.json', 'w') as outfile:
         json.dump(biases, outfile)
+        
+def loo_val_helper(arr, left_vec, right_vec): 
+    left_pole = left_vec.mean(axis=0)
+    right_pole = right_vec.mean(axis=0)
+    microframe = right_pole - left_pole
+    sim = 1 - spatial.distance.cosine(arr, microframe)
+    if math.isnan(sim): print(microframe, arr, sim)
+    return sim
+        
+def loo_val(glove_vecs, axes): 
+    '''
+    leave-one-out validation where we calculate the simlarity of 
+    one adjective to microframes 
+    '''
+    with open(LOGS + 'semantics_val/axes_quality.txt', 'w') as outfile: 
+        for pole in sorted(axes.keys()): 
+            left = axes[pole][0] # list of words
+            left_vec = [] # list of vectors 
+            left_vocab = []
+            for w in left: 
+                if w in glove_vecs: 
+                    left_vec.append(glove_vecs[w])
+                    left_vocab.append(w)
+            if len(left_vec) <= 2: 
+                # pole is too small/unstable
+                outfile.write(pole + '\tNA\tNA\tNA\n')
+                continue
+
+            right = axes[pole][1]
+            right_vec = [] # list of vectors 
+            right_vocab = []
+            for w in right: 
+                if w in glove_vecs: 
+                    right_vec.append(glove_vecs[w])
+                    right_vocab.append(w)
+            if len(right_vec) <= 2: 
+                # pole is too small/unstable
+                outfile.write(pole + '\tNA\tNA\tNA\n')
+                continue
+
+            # leave one out 
+            example = None
+            left_vec = np.ma.array(left_vec, mask=False)
+            right_vec = np.ma.array(right_vec, mask=False)
+            for i in range(left_vec.shape[0]): 
+                left_vec.mask[i] = True
+                arr = left_vec.data[i]
+                sim = loo_val_helper(arr, left_vec, right_vec)
+                outfile.write(pole + '\t' + left_vocab[i] + '\t' + str(sim) + '\tleft\n')
+                left_vec.mask[i] = False
+
+            for i in range(right_vec.shape[0]): 
+                right_vec.mask[i] = True
+                arr = right_vec.data[i]
+                sim = loo_val_helper(arr, left_vec, right_vec)
+                outfile.write(pole + '\t' + right_vocab[i] + '\t' + str(sim) + '\tright\n')
+                right_vec.mask[i] = False
+            
+def inspect_axes(): 
+    axes, axes_vocab = load_wordnet_axes()
+    vocab = set()
+    glove_vecs = get_glove_vecs(vocab, axes_vocab)
+    loo_val(glove_vecs, axes)
     
 def main(): 
+    inspect_axes()
     #save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
     #save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
     #lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
+    #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
     #frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
     #lda_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
     #prep_datasets()
