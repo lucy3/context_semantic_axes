@@ -6,6 +6,9 @@ import json
 from tqdm import tqdm
 import wikitextparser as wtp
 from transformers import BasicTokenizer
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import Row, SQLContext
+from functools import partial
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -33,67 +36,29 @@ def get_occupations():
     '''
     pass
 
-def get_titles(vocab, vocab_name): 
-    '''
-    Get titles of pages that contain the keywords we
-    are interested in, and download the wikitext of those pages.
-    
-    This is deprecated/unused because the wikipedia pages that get retrieved
-    are usually biased towards proper entities that contain the keyword 
-    rather than general uses of the keyword. 
-    '''
-    titles = set()
-    for w in tqdm(vocab): 
-        response = requests.get('https://en.wikipedia.org/w/api.php?action=query&list=search&srwhat=text&srsearch=' + w + '&format=json')
-        if not response.ok: 
-            print("Problem with", w)
-        res = json.loads(response.text)['query']['search']
-        for r in res: 
-            titles.add(r['title'])
-    with open(LOGS + 'wikipedia/' + vocab_name + '_titles.txt', 'w') as outfile: 
-        for title in titles: 
-            outfile.write(title + '\n')
+def contains_vocab(line, tokenizer=None, vocab=set()): 
+    tokens = tokenizer.tokenize(line)[:512]
+    return len(set(tokens) & vocab) != 0
             
-def download_pages(title_file): 
-    """
-    This is deprecated/unused because the wikipedia pages that get retrieved
-    are usually biased towards proper entities that contain the keyword 
-    rather than general uses of the keyword. 
-    """
-    titles = []
-    with open(title_file, 'r') as infile: 
-        for line in infile:
-            titles.append(line.strip())
-    page_num = 0
-    for wiki_title in tqdm(titles): 
-        page_num += 1
-        wiki_title = wiki_title.replace('&', '%26').replace('+', '%2B')
-        response = requests.get('https://en.wikipedia.org/w/api.php?action=parse&page=' + wiki_title + '&prop=wikitext&formatversion=2&format=json')
-        if not response.ok: 
-            print("Problem with", wiki_title)
-            continue
-        wikitext = json.loads(response.text)
-        if 'parse' not in wikitext or 'wikitext' not in wikitext['parse']: 
-            print("Problem with dictionary", wiki_title)
-            continue
-        try: 
-            wikitext = wikitext['parse']['wikitext']
-            wikitext = wtp.remove_markup(wikitext)
-            with open(LOGS + 'wikipedia/pages/' + str(page_num), 'w') as outfile: 
-                outfile.write(wiki_title + '\n')
-                outfile.write(wikitext)
-        except: 
-            print("Something went wrong with", wiki_title)
-            
-def sample_from_wikipedia(vocab, vocab_name): 
+def sample_wikipedia(vocab, vocab_name): 
     '''
-    
+    Finds occurrences of vocab words in a sample of wikipedia
     '''
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
+
+    wikipedia_file = '/mnt/data0/corpora/wikipedia/enwiki-20211101-pages-meta-current.xml'
     tokenizer = BasicTokenizer(do_lower_case=True)
+    data = sc.textFile(wikipedia_file).sample(False,0.1,0)
+    data = data.filter(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
+    data.coalesce(1).saveAsTextFile(LOGS + 'wikipedia/' + vocab_name + '_data')
+    
+    sc.stop()
 
 def main(): 
     vocab = get_adj()
-    sample_from_wikipedia(vocab, 'adj')
+    sample_wikipedia(vocab, 'adj')
 
 if __name__ == '__main__':
     main()
