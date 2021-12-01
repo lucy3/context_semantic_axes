@@ -161,6 +161,12 @@ def retrieve_wordnet_axes():
     
     Synsets are groups of synonymous words 
     '''
+    glove_vocab = set()
+    with open(GLOVE + 'glove.6B.300d.txt', 'r') as infile:
+        for line in infile: 
+            contents = line.split()
+            glove_vocab.add(contents[0])
+            
     i = 0
     seen = set() # adjective clusters already seen
     with open(LOGS + 'semantics_val/wordnet_axes.txt', 'w') as outfile: 
@@ -179,6 +185,13 @@ def retrieve_wordnet_axes():
                         antonyms.update(ant.synset().lemma_names())
                         for ant_sim_ss in ant.synset().similar_tos(): 
                             antonyms.update(ant_sim_ss.lemma_names())
+                # check that word appears in GloVe
+                synonyms = synonyms & glove_vocab
+                antonyms = antonyms & glove_vocab
+                # remove '.' acronyms 
+                synonyms = [w for w in synonyms if '.' not in w]
+                antonyms = [w for w in antonyms if '.' not in w]
+                # check that pole is "robust"
                 if len(synonyms) < 3 or len(antonyms) < 3: continue
                 synonyms = ','.join(sorted(synonyms))
                 antonyms = ','.join(sorted(antonyms))
@@ -423,7 +436,8 @@ def loo_val(glove_vecs, axes):
                 right_vec.mask[i] = True
                 arr = right_vec.data[i]
                 sim = loo_val_helper(arr, left_vec, right_vec)
-                outfile.write(pole + '\t' + right_vocab[i] + '\t' + str(sim) + '\tright\n')
+                outfile.write(pole + '\t' + right_vocab[i]
+                              + '\t' + str(sim) + '\tright\n')
                 right_vec.mask[i] = False
             
 def inspect_axes(): 
@@ -433,13 +447,14 @@ def inspect_axes():
     loo_val(glove_vecs, axes)
     
 def main(): 
+    retrieve_wordnet_axes()
     inspect_axes()
-    #save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-    #save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
-    #lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-    #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-    #frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
-    #lda_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
+    save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
+    save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
+    lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
+    frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
+    lda_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
     #prep_datasets()
 
 if __name__ == '__main__':
