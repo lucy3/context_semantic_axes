@@ -6,8 +6,8 @@ import json
 from tqdm import tqdm
 import wikitextparser as wtp
 from transformers import BasicTokenizer
-from pyspark import SparkConf, SparkContext
-from pyspark.sql import Row, SQLContext
+#from pyspark import SparkConf, SparkContext
+#from pyspark.sql import Row, SQLContext
 from functools import partial
 from collections import Counter
 
@@ -60,13 +60,18 @@ def sample_wikipedia(vocab, vocab_name):
     data = sc.textFile(wikipedia_file).filter(get_content_lines)
     data = data.sample(False,0.15,0)
     data = data.filter(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
-    data = data.map(lambda line: wtp.remove_markup(line))
     data.coalesce(1).saveAsTextFile(LOGS + 'wikipedia/' + vocab_name + '_data')
     
     sc.stop()
     
 def count_vocab_words(line, tokenizer=None, vocab=set()): 
     # more conservative cutoff in search to account for wordpieces
+    try: 
+        line = wtp.remove_markup(line)
+    except AttributeError: 
+        # one line with a url breaks wtp
+        print("####ERROR", line)
+        return []
     tokens = tokenizer.tokenize(line)[:450]
     counts = Counter(tokens)
     wspace_tokens = line.lower().split()[:450]
@@ -81,9 +86,10 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
             ret.append((w, counts[w]))
     return ret
     
-def get_embeddings(vocab, vocab_name): 
+def count_instances(vocab, vocab_name): 
     '''
-    Average the embeddings for each word on wikipedia
+    Count the total number of instances of each
+    vocab word in the sample of wikipedia. 
     '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
@@ -98,12 +104,37 @@ def get_embeddings(vocab, vocab_name):
         json.dump(total_count, outfile)
         
     sc.stop()
+    
+def count_axes(): 
+    with open(LOGS + 'wikipedia/adj_counts.json', 'r') as infile: 
+        total_count = Counter(json.load(infile))
+        
+    synset_counts = Counter()
+    min_count = float("inf")
+    max_count = 0
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t')
+            if len(contents) < 3: continue # no antonyms
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            axis1_count = sum([total_count[w] for w in axis1])
+            axis2 = contents[2].split(',')
+            axis2_count = sum([total_count[w] for w in axis2])
+            synset_counts[synset] = [axis1_count, axis2_count]
+            min_count = min([axis1_count, axis2_count, min_count])
+            max_count = max([axis1_count, axis2_count, max_count])
+            
+    print(min_count, max_count)
+            
+    with open(LOGS + 'wikipedia/axes_counts.json', 'w') as outfile: 
+        json.dump(synset_counts, outfile)
 
 def main(): 
     vocab = get_adj()
-    sample_wikipedia(vocab, 'adj')
-    
-    get_embeddings(vocab, 'adj')
+    #sample_wikipedia(vocab, 'adj')
+    #get_embeddings(vocab, 'adj')
+    count_axes()
 
 if __name__ == '__main__':
     main()
