@@ -6,10 +6,11 @@ import json
 from tqdm import tqdm
 import wikitextparser as wtp
 from transformers import BasicTokenizer
-#from pyspark import SparkConf, SparkContext
-#from pyspark.sql import Row, SQLContext
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import Row, SQLContext
 from functools import partial
 from collections import Counter
+import random
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -37,31 +38,67 @@ def get_occupations():
     '''
     pass
 
-def contains_vocab(line, tokenizer=None, vocab=set()): 
+def contains_vocab(tup, tokenizer=None, vocab=set()): 
+    '''
+    Input: [(line, line_id)]
+    Output: [(vocab_token1, line_id), (vocab_token2, line_id)]
+    '''
     # more conservative cutoff in search to account for wordpieces
+    line, line_id = tup
+    try: 
+        line = wtp.remove_markup(line)
+    except AttributeError: 
+        # some short lines with url breaks wtp
+        print("####ERROR", line)
+        return []
     tokens = tokenizer.tokenize(line)[:450]
-    return len(set(tokens) & vocab) != 0
+    overlap = set(tokens) & vocab
+    wspace_tokens = line.lower().split()[:450]
+    overlap = (set(wspace_tokens) & vocab) | overlap 
+    ret = []
+    for w in overlap: 
+        ret.append((w, line_id))
+    return ret
 
 def get_content_lines(line): 
     # only get wikitext content
     line = line.strip()
-    return not line.startswith('{{') and not line.startswith('<')
+    return not line.startswith('{{') and not line.startswith('<') and \
+        not line.startswith('==')
+
+def exact_sample(tup): 
+    w = tup[0]
+    occur = tup[1]
+    if len(occur) < 1000: 
+        return tup
+    else: 
+        return (tup[0], random.sample(occur, 1000))
             
 def sample_wikipedia(vocab, vocab_name): 
     '''
-    Finds occurrences of vocab words in a sample of wikipedia
+    Finds occurrences of vocab words in wikipedia
     '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
 
     wikipedia_file = '/mnt/data0/corpora/wikipedia/enwiki-20211101-pages-meta-current.xml'
+    #wikipedia_file = '/mnt/data0/corpora/wikipedia/small_wiki'
     tokenizer = BasicTokenizer(do_lower_case=True)
     data = sc.textFile(wikipedia_file).filter(get_content_lines)
-    data = data.sample(False,0.15,0)
-    data = data.filter(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
+    data = data.zipWithUniqueId() 
+    token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
+    token_counts = token_data.map(lambda tup: (tup[0], 1)).reduceByKey(lambda n1, n2: n1 + n2)
+    fractions = token_counts.map(lambda tup: (tup[0], min(1.0, 1500.0/tup[1]))).collectAsMap() 
+    token_data = token_data.sampleByKey(False, fractions) # approx sample before exact sample
+    token_data = token_data.groupByKey().mapValues(list).map(exact_sample).collectAsMap()
+    with open(LOGS + 'wikipedia/' + vocab_name + '_lines.json', 'w') as outfile: 
+        json.dump(token_data, outfile)
+    line_ids_to_keep = set()
+    for token in token_data: 
+        line_ids_to_keep.update(token_data[token])
+    data = data.filter(lambda tup: tup[1] in line_ids_to_keep).map(lambda tup: str(tup[1]) + '\t' + tup[0]) 
     data.coalesce(1).saveAsTextFile(LOGS + 'wikipedia/' + vocab_name + '_data')
-    
     sc.stop()
     
 def count_vocab_words(line, tokenizer=None, vocab=set()): 
@@ -132,9 +169,9 @@ def count_axes():
 
 def main(): 
     vocab = get_adj()
-    #sample_wikipedia(vocab, 'adj')
+    sample_wikipedia(vocab, 'adj')
     #get_embeddings(vocab, 'adj')
-    count_axes()
+    #count_axes()
 
 if __name__ == '__main__':
     main()
