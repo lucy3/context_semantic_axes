@@ -5,16 +5,19 @@ import requests
 import json
 from tqdm import tqdm
 import wikitextparser as wtp
-from transformers import BasicTokenizer
-from pyspark import SparkConf, SparkContext
-from pyspark.sql import Row, SQLContext
+from transformers import BasicTokenizer, BertTokenizerFast, BertModel
+#from pyspark import SparkConf, SparkContext
+#from pyspark.sql import Row, SQLContext
 from functools import partial
-from collections import Counter
+from collections import Counter, defaultdict
 import random
+import torch
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def get_adj(): 
     '''
@@ -89,7 +92,7 @@ def sample_wikipedia(vocab, vocab_name):
     data = data.zipWithUniqueId() 
     token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
     token_counts = token_data.map(lambda tup: (tup[0], 1)).reduceByKey(lambda n1, n2: n1 + n2)
-    fractions = token_counts.map(lambda tup: (tup[0], min(1.0, 1500.0/tup[1]))).collectAsMap() 
+    fractions = token_counts.map(lambda tup: (tup[0], min(1.0, 5000.0/tup[1]))).collectAsMap() 
     token_data = token_data.sampleByKey(False, fractions) # approx sample before exact sample
     token_data = token_data.groupByKey().mapValues(list).map(exact_sample).collectAsMap()
     with open(LOGS + 'wikipedia/' + vocab_name + '_lines.json', 'w') as outfile: 
@@ -123,25 +126,97 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
             ret.append((w, counts[w]))
     return ret
     
-def count_instances(vocab, vocab_name): 
+def batch_adj_data(): 
+    vocab = get_adj()
+    vocab_name = 'adj'
+    with open(LOGS + 'wikipedia/temp_' + vocab_name + '_lines.json', 'r') as infile: 
+        token_lines = json.load(infile) # {vocab word: [lines it appears in]}
+    lines_tokens = defaultdict(list) # {line_num: [vocab words in line]}
+    for token in token_lines: 
+        for line_num in token_lines[token]: 
+            lines_tokens[line_num].append(token)
+    # TODO: get a mapping from word to axes it belongs to
+    batch_size = 128
+    batch_sentences = [] # each item is a list
+    batch_words = [] # each item is a list
+    batch_spans = []
+    curr_batch = []
+    curr_words = []
+    curr_spans = []
+    with open(LOGS + 'wikipedia/temp_' + vocab_name + '_data/part-00000', 'r') as infile: 
+        for line in infile:
+            contents = line.split('\t')
+            line_num = contents[0]
+            text = '\t'.join(contents[1:])
+            text = wtp.remove_markup(text)
+            words_in_line = lines_tokens[line_num]
+            lower_text = text.lower()
+            spans = [-1]*len(text) # each index is either -1 or the index of word in words_in_line
+            for i, word in enumerate(words_in_line): 
+                res = re.search(r'\b' + word + r'\b', lower_text)
+                if res is None: print("PROBLEM WITH", word, lower_text)
+                for j in range(res.start(), res.end()): 
+                    spans[j] = i 
+            curr_batch.append(text)
+            curr_words.append(words_in_line)
+            curr_spans.append(spans) 
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                batch_words.append(curr_words)
+                batch_spans.append(curr_spans)
+                curr_batch = []
+                curr_words = []
+                curr_spans = []
+                #break # TODO remove this
+        if len(curr_batch) != 0: # fence post
+            batch_sentences.append(curr_batch)
+            batch_words.append(curr_words)
+            batch_spans.append(curr_spans)
+    return batch_sentences, batch_words, batch_spans
+
+def get_adj_embeddings(): 
     '''
-    Count the total number of instances of each
-    vocab word in the sample of wikipedia. 
+    This function gets embeddings for adjectives in Wikipedia
+    This is slightly messy because adjectives in Wordnet 
+    can be multiple words. 
     '''
-    conf = SparkConf()
-    sc = SparkContext(conf=conf)
-    sqlContext = SQLContext(sc)
-    
-    tokenizer = BasicTokenizer(do_lower_case=True)
-    data = sc.textFile(LOGS + 'wikipedia/' + vocab_name + '_data')
-    data = data.flatMap(partial(count_vocab_words, tokenizer=tokenizer, vocab=vocab))
-    data = data.reduceByKey(lambda n1, n2: n1 + n2)
-    total_count = Counter(data.collectAsMap())
-    with open(LOGS + 'wikipedia/' + vocab_name + '_counts.json', 'w') as outfile: 
-        json.dump(total_count, outfile)
-        
-    sc.stop()
-    
+    batch_sentences, batch_words, batch_spans = batch_adj_data()
+    return 
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.eval()
+    model.to(device)
+    for i, batch in enumerate(batch_sentences): # for every batch
+        word_tokenids = {} # { j : { word : [token ids] } }
+        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        # possibly lame way to get tokens for multi-"word" adjectives (e.g. "fifty-nine")
+        for j in range(len(batch)): # for every example
+            this_w_tid = defaultdict(list) # { word : [token ids] }  
+            # TODO: get mapping from word to character span 
+            word_ids = encoded_inputs.word_ids(j)
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    span = encoded_inputs.token_to_chars(j, word_id)
+                    # if span.end maps to a word, then add k to dict of word to token ids
+                    if span.end in word_charidx: 
+                        this_word = word_charidx[span.end]
+                        this_w_tid[this_word].append(k)
+            word_tokenids[j] = this_w_tid
+        break
+        outputs = model(**encoded_inputs)
+        states = output.hidden_states
+        vector = torch.stack([states[i] for i in layers]) # concatenate last four
+        # TODO: check size of vector 
+        for j in range(len(batch)): # for every example
+            for word in batch_words[i][j]: 
+                token_ids_word = np.array(word_tokenids[j][word]) 
+                word_tokens_output = vector[j, token_ids_word]
+                word_tokens_output.mean(dim=0) # average word pieces
+        # TODO: sum onto zero-initialized vectors for each axes, count occurrences
+    # TODO: divide sum by total to get an average representation of axes
+    # TODO: save axes into matrix, save axes in txt in order of matrix rows
+
 def count_axes(): 
     with open(LOGS + 'wikipedia/adj_counts.json', 'r') as infile: 
         total_count = Counter(json.load(infile))
@@ -168,9 +243,9 @@ def count_axes():
         json.dump(synset_counts, outfile)
 
 def main(): 
-    vocab = get_adj()
-    sample_wikipedia(vocab, 'adj')
-    #get_embeddings(vocab, 'adj')
+    #vocab = get_adj()
+    #sample_wikipedia(vocab, 'adj')
+    get_adj_embeddings()
     #count_axes()
 
 if __name__ == '__main__':
