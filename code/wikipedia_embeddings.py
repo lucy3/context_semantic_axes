@@ -12,6 +12,7 @@ from functools import partial
 from collections import Counter, defaultdict
 import random
 import torch
+import numpy as np
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -129,50 +130,46 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
 def batch_adj_data(): 
     vocab = get_adj()
     vocab_name = 'adj'
-    with open(LOGS + 'wikipedia/temp_' + vocab_name + '_lines.json', 'r') as infile: 
-        token_lines = json.load(infile) # {vocab word: [lines it appears in]}
-    lines_tokens = defaultdict(list) # {line_num: [vocab words in line]}
-    for token in token_lines: 
-        for line_num in token_lines[token]: 
-            lines_tokens[line_num].append(token)
-    # TODO: get a mapping from word to axes it belongs to
-    batch_size = 128
+    with open(LOGS + 'wikipedia/' + vocab_name + '_lines_random.json', 'r') as infile: 
+        lines_tokens = json.load(infile) # {line_num: [vocab words in line]}
+    batch_size = 16
     batch_sentences = [] # each item is a list
     batch_words = [] # each item is a list
-    batch_spans = []
     curr_batch = []
     curr_words = []
-    curr_spans = []
-    with open(LOGS + 'wikipedia/temp_' + vocab_name + '_data/part-00000', 'r') as infile: 
+    btokenizer = BasicTokenizer(do_lower_case=True)
+    vocab = set()
+    with open(LOGS + 'wikipedia/' + vocab_name + '_data/part-00000', 'r') as infile: 
         for line in infile:
             contents = line.split('\t')
             line_num = contents[0]
+            if line_num not in lines_tokens: continue
             text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text)
+            text = wtp.remove_markup(text).lower()
             words_in_line = lines_tokens[line_num]
-            lower_text = text.lower()
-            spans = [-1]*len(text) # each index is either -1 or the index of word in words_in_line
-            for i, word in enumerate(words_in_line): 
-                res = re.search(r'\b' + word + r'\b', lower_text)
-                if res is None: print("PROBLEM WITH", word, lower_text)
-                for j in range(res.start(), res.end()): 
-                    spans[j] = i 
-            curr_batch.append(text)
+            vocab.update(words_in_line)
+            dash_words = set()
+            for w in words_in_line: 
+                if '-' in w:  
+                    sub_w = w.replace('-', 'xxxx')
+                    dash_words.add(sub_w)
+                    text = text.replace(w, sub_w)
+            tokens = btokenizer.tokenize(text)
+            if dash_words: 
+                for i in range(len(tokens)): 
+                    if tokens[i] in dash_words: 
+                        tokens[i] = tokens[i].replace('xxxx', '-')
+            curr_batch.append(tokens)
             curr_words.append(words_in_line)
-            curr_spans.append(spans) 
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
                 batch_words.append(curr_words)
-                batch_spans.append(curr_spans)
                 curr_batch = []
                 curr_words = []
-                curr_spans = []
-                #break # TODO remove this
         if len(curr_batch) != 0: # fence post
             batch_sentences.append(curr_batch)
             batch_words.append(curr_words)
-            batch_spans.append(curr_spans)
-    return batch_sentences, batch_words, batch_spans
+    return batch_sentences, batch_words, vocab
 
 def get_adj_embeddings(): 
     '''
@@ -180,46 +177,53 @@ def get_adj_embeddings():
     This is slightly messy because adjectives in Wordnet 
     can be multiple words. 
     '''
-    batch_sentences, batch_words, batch_spans = batch_adj_data()
-    return 
+    print("Batching contexts...")
+    batch_sentences, batch_words, vocab = batch_adj_data()
+    print("Getting model...")
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
     model = BertModel.from_pretrained('bert-base-uncased')
     layers = [-4, -3, -2, -1] # last four layers
-    model.eval()
     model.to(device)
-    for i, batch in enumerate(batch_sentences): # for every batch
+    model.eval()
+    # initialize word representations
+    word_reps = {}
+    for w in vocab: 
+        word_reps[w] = np.zeros(3072)
+    word_counts = Counter()
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
         word_tokenids = {} # { j : { word : [token ids] } }
-        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
-        # possibly lame way to get tokens for multi-"word" adjectives (e.g. "fifty-nine")
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
         for j in range(len(batch)): # for every example
-            this_w_tid = defaultdict(list) # { word : [token ids] }  
-            # TODO: get mapping from word to character span 
             word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = defaultdict(list) # {word : [token ids]}
             for k, word_id in enumerate(word_ids): # for every token
                 if word_id is not None: 
-                    span = encoded_inputs.token_to_chars(j, word_id)
-                    # if span.end maps to a word, then add k to dict of word to token ids
-                    if span.end in word_charidx: 
-                        this_word = word_charidx[span.end]
-                        this_w_tid[this_word].append(k)
-            word_tokenids[j] = this_w_tid
-        break
-        outputs = model(**encoded_inputs)
-        states = output.hidden_states
-        vector = torch.stack([states[i] for i in layers]) # concatenate last four
-        # TODO: check size of vector 
-        for j in range(len(batch)): # for every example
+                    curr_word = batch[j][word_id]
+                    if curr_word in batch_words[i][j]: 
+                        word_tokenids[curr_word].append(k)
             for word in batch_words[i][j]: 
-                token_ids_word = np.array(word_tokenids[j][word]) 
-                word_tokens_output = vector[j, token_ids_word]
-                word_tokens_output.mean(dim=0) # average word pieces
-        # TODO: sum onto zero-initialized vectors for each axes, count occurrences
-    # TODO: divide sum by total to get an average representation of axes
-    # TODO: save axes into matrix, save axes in txt in order of matrix rows
+                token_ids_word = np.array(word_tokenids[word]) 
+                word_embed = vector[j][token_ids_word]
+                word_embed = word_embed.mean(dim=0) # average word pieces
+                word_reps[word] += word_embed.cpu().detach().numpy()
+                word_counts[word] += 1
+    for word in word_reps: 
+        word_reps[word] = list(word_reps[word] / word_counts[word])
+    with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
+        json.dump(word_reps, outfile)
 
 def count_axes(): 
-    with open(LOGS + 'wikipedia/adj_counts.json', 'r') as infile: 
-        total_count = Counter(json.load(infile))
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+        adj_lines = json.load(infile)
+    total_count = Counter()
+    for adj in adj_lines: 
+        total_count[adj] = len(adj_lines[adj])
         
     synset_counts = Counter()
     min_count = float("inf")
@@ -242,11 +246,48 @@ def count_axes():
     with open(LOGS + 'wikipedia/axes_counts.json', 'w') as outfile: 
         json.dump(synset_counts, outfile)
 
+def sample_random_contexts(axis, adj_lines): 
+    axis_lines = set()
+    for adj in axis: 
+        for line in adj_lines[adj]: 
+            axis_lines.add((adj, line))
+    axis_lines = random.sample(axis_lines, 100)
+    return axis_lines
+
+def get_axes_contexts(): 
+    '''
+    Inputs: 
+        - adj_lines.json: adjectives to lines in wikipedia
+        - wordnet_axes.txt: axes to adjectives
+    Output: 
+        - a dictionary from line number to adj in line
+    '''
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+        adj_lines = json.load(infile)
+    
+    ret = defaultdict(list) # { line_num: [vocab words in line]}
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t') 
+            if len(contents) < 3: continue # no antonyms
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            axis1_lines = sample_random_contexts(axis1, adj_lines)
+            for tup in axis1_lines: 
+                ret[tup[1]].append(tup[0])
+            axis2 = contents[2].split(',')
+            axis2_lines = sample_random_contexts(axis2, adj_lines)
+            for tup in axis2_lines: 
+                ret[tup[1]].append(tup[0])
+    with open(LOGS + 'wikipedia/adj_lines_random.json', 'w') as outfile: 
+        json.dump(ret, outfile)
+
 def main(): 
     #vocab = get_adj()
     #sample_wikipedia(vocab, 'adj')
     get_adj_embeddings()
     #count_axes()
+    #get_axes_contexts()
 
 if __name__ == '__main__':
     main()
