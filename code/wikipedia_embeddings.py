@@ -5,9 +5,9 @@ import requests
 import json
 from tqdm import tqdm
 import wikitextparser as wtp
-from transformers import BasicTokenizer, BertTokenizerFast, BertModel
-#from pyspark import SparkConf, SparkContext
-#from pyspark.sql import Row, SQLContext
+from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import Row, SQLContext
 from functools import partial
 from collections import Counter, defaultdict
 import random
@@ -55,20 +55,30 @@ def contains_vocab(tup, tokenizer=None, vocab=set()):
         # some short lines with url breaks wtp
         print("####ERROR", line)
         return []
-    tokens = tokenizer.tokenize(line)[:450]
+    line = line.replace('-', 'xqxq')
+    tokens = tokenizer.tokenize(line)
     overlap = set(tokens) & vocab
-    wspace_tokens = line.lower().split()[:450]
-    overlap = (set(wspace_tokens) & vocab) | overlap 
     ret = []
     for w in overlap: 
         ret.append((w, line_id))
     return ret
 
-def get_content_lines(line): 
+def get_content_lines(line, tokenizer=None): 
     # only get wikitext content
     line = line.strip()
-    return not line.startswith('{{') and not line.startswith('<') and \
+    line_content = not line.startswith('{{') and not line.startswith('<') and \
         not line.startswith('==')
+    if not line_content: 
+        return False
+    try: 
+        line = wtp.remove_markup(line)
+    except AttributeError: 
+        # one line with a url breaks wtp
+        print("####ERROR", line)
+        return False
+    tokens = tokenizer.tokenize(line)
+    line_len = len(tokens) <= 510 and len(tokens) > 10
+    return line_len
 
 def exact_sample(tup): 
     w = tup[0]
@@ -85,13 +95,21 @@ def sample_wikipedia(vocab, vocab_name):
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
+    
+    new_vocab = set()
+    for w in vocab: # helps handle dashed words
+        if '-' in w: 
+            new_vocab.add(w.replace('-', 'xqxq'))
+        else: 
+            new_vocab.add(w)
 
     wikipedia_file = '/mnt/data0/corpora/wikipedia/enwiki-20211101-pages-meta-current.xml'
     #wikipedia_file = '/mnt/data0/corpora/wikipedia/small_wiki'
     tokenizer = BasicTokenizer(do_lower_case=True)
-    data = sc.textFile(wikipedia_file).filter(get_content_lines)
+    wp_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    data = sc.textFile(wikipedia_file).filter(partial(get_content_lines, tokenizer=wp_tokenizer))
     data = data.zipWithUniqueId() 
-    token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=vocab))
+    token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=new_vocab))
     token_counts = token_data.map(lambda tup: (tup[0], 1)).reduceByKey(lambda n1, n2: n1 + n2)
     fractions = token_counts.map(lambda tup: (tup[0], min(1.0, 5000.0/tup[1]))).collectAsMap() 
     token_data = token_data.sampleByKey(False, fractions) # approx sample before exact sample
@@ -106,6 +124,9 @@ def sample_wikipedia(vocab, vocab_name):
     sc.stop()
     
 def count_vocab_words(line, tokenizer=None, vocab=set()): 
+    '''
+    This is deprecated. 
+    '''
     # more conservative cutoff in search to account for wordpieces
     try: 
         line = wtp.remove_markup(line)
@@ -113,9 +134,9 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
         # one line with a url breaks wtp
         print("####ERROR", line)
         return []
-    tokens = tokenizer.tokenize(line)[:450]
+    tokens = tokenizer.tokenize(line)
     counts = Counter(tokens)
-    wspace_tokens = line.lower().split()[:450]
+    wspace_tokens = line.lower().split()
     wspace_counts = Counter(wspace_tokens)
     ret = []
     for w in wspace_counts: 
@@ -130,9 +151,9 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
 def batch_adj_data(): 
     vocab = get_adj()
     vocab_name = 'adj'
-    with open(LOGS + 'wikipedia/' + vocab_name + '_lines_random.json', 'r') as infile: 
+    with open(LOGS + 'wikipedia/' + vocab_name + '_lines_random.json', 'r') as infile:
         lines_tokens = json.load(infile) # {line_num: [vocab words in line]}
-    batch_size = 16
+    batch_size = 8
     batch_sentences = [] # each item is a list
     batch_words = [] # each item is a list
     curr_batch = []
@@ -151,14 +172,14 @@ def batch_adj_data():
             dash_words = set()
             for w in words_in_line: 
                 if '-' in w:  
-                    sub_w = w.replace('-', 'xxxx')
+                    sub_w = w.replace('-', 'xqxq')
                     dash_words.add(sub_w)
                     text = text.replace(w, sub_w)
             tokens = btokenizer.tokenize(text)
             if dash_words: 
                 for i in range(len(tokens)): 
                     if tokens[i] in dash_words: 
-                        tokens[i] = tokens[i].replace('xxxx', '-')
+                        tokens[i] = tokens[i].replace('xqxq', '-')
             curr_batch.append(tokens)
             curr_words.append(words_in_line)
             if len(curr_batch) == batch_size: 
@@ -210,13 +231,87 @@ def get_adj_embeddings():
             for word in batch_words[i][j]: 
                 token_ids_word = np.array(word_tokenids[word]) 
                 word_embed = vector[j][token_ids_word]
-                word_embed = word_embed.mean(dim=0) # average word pieces
-                word_reps[word] += word_embed.cpu().detach().numpy()
+                word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
+                if np.isnan(word_embed).any(): 
+                    print(word, batch[j])
+                    return
+                word_reps[word] += word_embed
                 word_counts[word] += 1
-    for word in word_reps: 
-        word_reps[word] = list(word_reps[word] / word_counts[word])
+    res = {}
+    for word in word_counts: 
+        res[word] = list(word_reps[word] / word_counts[word])
     with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
-        json.dump(word_reps, outfile)
+        json.dump(res, outfile)
+        
+def get_bert_mean_std(): 
+    '''
+    Get a mean and standard deviation vector
+    from a sample of BERT embeddings, one random
+    word per context drawn from approx 10% 
+    of the adjective dataset 
+    '''
+    random.seed(0)
+    batch_size = 6
+    batch_sentences = [] # each item is a list
+    curr_batch = []
+    print("Batching data...")
+    prob = 5
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
+        for line in infile:
+            if random.randrange(100) > prob: continue
+            contents = line.split('\t')
+            text = '\t'.join(contents[1:])
+            text = wtp.remove_markup(text).lower()
+            curr_batch.append(text)
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                curr_batch = []
+        if len(curr_batch) != 0: # fence post
+            batch_sentences.append(curr_batch)
+    print("Num batches:", len(batch_sentences))
+    print("Getting model...")
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.to(device)
+    model.eval()
+
+    print("Calculate mean...")
+    word_rep = np.zeros(3072)
+    word_count = 0
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        indices = np.random.randint(vector.size()[1], size=vector.size()[0])
+        # batch_size x 3072
+        vector = vector[np.arange(vector.size()[0]),indices,:]
+        word_count += vector.size()[0]
+        word_rep += vector.sum(dim=0).cpu().detach().numpy()
+    mean_word_rep = word_rep / word_count
+    
+    print("Calculate std...")
+    word_rep = np.zeros(3072)
+    word_count = 0
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        indices = np.random.randint(vector.size()[1], size=vector.size()[0])
+        # batch_size x 3072
+        vector = vector[np.arange(vector.size()[0]),indices,:].cpu().detach().numpy()
+        word_count += vector.shape[0]
+        vector = np.square(vector - mean_word_rep)
+        word_rep += np.sum(vector, axis=0)
+    std_word_rep = np.sqrt(word_rep / word_count)
+    np.save(LOGS + 'wikipedia/mean_BERT.npy', mean_word_rep)
+    np.save(LOGS + 'wikipedia/std_BERT.npy', std_word_rep)
 
 def count_axes(): 
     with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
@@ -256,6 +351,7 @@ def sample_random_contexts(axis, adj_lines):
 
 def get_axes_contexts(): 
     '''
+    This function gets random contexts of each adjective. 
     Inputs: 
         - adj_lines.json: adjectives to lines in wikipedia
         - wordnet_axes.txt: axes to adjectives
@@ -283,10 +379,10 @@ def get_axes_contexts():
         json.dump(ret, outfile)
 
 def main(): 
-    #vocab = get_adj()
-    #sample_wikipedia(vocab, 'adj')
-    get_adj_embeddings()
-    #count_axes()
+    vocab = get_adj()
+    sample_wikipedia(vocab, 'adj')
+    #get_adj_embeddings()
+    #get_bert_mean_std()
     #get_axes_contexts()
 
 if __name__ == '__main__':

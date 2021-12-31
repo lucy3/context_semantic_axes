@@ -250,22 +250,22 @@ def get_pole_matrix(glove_vecs, axes):
     
     np.save(LOGS + 'semantics_val/wordnet_axes.npy', adj_matrix)
     
-def get_poles(glove_vecs, axes): 
+def get_poles(vec_dict, axes): 
     adj_poles = {} # synset : (right_vec, left_vec)
     for pole in sorted(axes.keys()): 
         left = axes[pole][0]
         left_vec = []
         for w in left: 
-            if w in glove_vecs: 
-                left_vec.append(glove_vecs[w])
+            if w in vec_dict: 
+                left_vec.append(vec_dict[w])
         if len(left_vec) == 0: continue
         left_vec = np.array(left_vec)
         
         right = axes[pole][1]
         right_vec = []
         for w in right: 
-            if w in glove_vecs: 
-                right_vec.append(glove_vecs[w])
+            if w in vec_dict: 
+                right_vec.append(vec_dict[w])
         if len(right_vec) == 0: continue
         right_vec = np.array(right_vec)
         
@@ -476,12 +476,8 @@ def loo_val_helper(arr, left_vec, right_vec, exp_name=''):
         arr = scaler.transform(arr.reshape(1, -1))
         arr = pca.transform(arr)
     if exp_name == 'scaler': 
-        this_adj_matrix = np.concatenate((left_vec, right_vec), axis=0)
-        scaler = StandardScaler()
-        this_adj_matrix = scaler.fit_transform(this_adj_matrix)
-        left_vec = this_adj_matrix[:left_vec.shape[0], :]
-        right_vec = this_adj_matrix[left_vec.shape[0]:, :]
-        arr = scaler.transform(arr.reshape(1, -1))
+        # TODO
+        pass
     if exp_name == 'kbest': 
         this_adj_matrix = np.concatenate((left_vec, right_vec), axis=0)
         this_adj_scores = [1] * left_vec.shape[0] + [0] * right_vec.shape[0]
@@ -497,7 +493,7 @@ def loo_val_helper(arr, left_vec, right_vec, exp_name=''):
     if math.isnan(sim): print(microframe, arr, sim)
     return sim
         
-def loo_val(glove_vecs, axes, exp_name=''): 
+def loo_val(vec_dict, axes, exp_name=''): 
     '''
     leave-one-out validation where we calculate the simlarity of 
     one adjective to microframes 
@@ -508,16 +504,16 @@ def loo_val(glove_vecs, axes, exp_name=''):
             left_vec = [] # list of vectors 
             left_vocab = []
             for w in left: 
-                if w in glove_vecs: 
-                    left_vec.append(glove_vecs[w])
+                if w in vec_dict: 
+                    left_vec.append(vec_dict[w])
                     left_vocab.append(w)
 
             right = axes[pole][1]
             right_vec = [] # list of vectors 
             right_vocab = []
             for w in right: 
-                if w in glove_vecs: 
-                    right_vec.append(glove_vecs[w])
+                if w in vec_dict: 
+                    right_vec.append(vec_dict[w])
                     right_vocab.append(w)
 
             # leave one out 
@@ -540,16 +536,34 @@ def loo_val(glove_vecs, axes, exp_name=''):
                 sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
                 outfile.write(pole + '\t' + right_vocab[i]
                               + '\t' + str(sim) + '\tright\n')
-            
-def inspect_axes(): 
+
+def get_bert_vecs(exp_name='bert-default'): 
+    with open(LOGS + 'semantics_val/adj_BERT.json', 'r') as infile: 
+        bert_vecs = json.load(infile)
+    if exp_name == 'bert-zscore': 
+        bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+        bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+        for vec in bert_vecs: 
+            bert_vecs[vec] = (np.array(bert_vecs[vec]) - bert_mean) / bert_std
+    else: 
+        for vec in bert_vecs: 
+            bert_vecs[vec] = np.array(bert_vecs[vec])
+    return bert_vecs
+
+def inspect_axes(exp_name): 
     axes, axes_vocab = load_wordnet_axes()
     vocab = set()
-    glove_vecs = get_glove_vecs(vocab, axes_vocab)
-    loo_val(glove_vecs, axes, 'kbest')
+    if exp_name in ['kbest', 'scaler', 'pca']: 
+        vec_dict = get_glove_vecs(vocab, axes_vocab)
+        loo_val(vec_dict, axes, exp_name)
+    elif exp_name in ['bert-default', 'bert-zscore']: 
+        vec_dict = get_bert_vecs(exp_name)
+        loo_val(vec_dict, axes, exp_name)
     
 def main(): 
 #     retrieve_wordnet_axes()
-    inspect_axes()
+    inspect_axes('bert-default')
+    inspect_axes('bert-zscore')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
 #     lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
