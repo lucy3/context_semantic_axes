@@ -116,7 +116,6 @@ def get_npmi_axes_contexts():
             axis2 = contents[2].split(',')
             axes_adj[synset] = (axis1, axis2)
     
-    npmi_res = {}
     for synset in tqdm(axes_adj): 
         left, right = axes_adj[synset]
         left_counts = Counter()
@@ -160,9 +159,8 @@ def get_npmi_axes_contexts():
                 npmi_left, npmi_right = npmi_helper(loov_totals, left_counts[w], loov_counts[w])
                 npmi_scores[adj][w] = (npmi_left, npmi_right)
                 
-        npmi_res[synset] = npmi_scores
-    with open(LOGS + 'wikipedia/all_npmi_scores.json', 'w') as outfile: 
-        json.dump(npmi_res, outfile)
+        with open(LOGS + 'wikipedia/npmi_scores/' + synset + '.json', 'w') as outfile: 
+            json.dump(npmi_scores, outfile)
         
 def get_high_npmi_lines(): 
     pass
