@@ -11,6 +11,7 @@ from transformers import BertTokenizer, BertModel, BertForMaskedLM
 from tqdm import tqdm
 
 def predict_masked_sent(tokens, masked_index, tokenizer, top_k=10):
+    # TODO: batch this stuff!!
     indexed_tokens = tokenizer.convert_tokens_to_ids(tokens)
     tokens_tensor = torch.tensor([indexed_tokens])
     tokens_tensor = tokens_tensor.to('cuda') 
