@@ -90,7 +90,10 @@ def exact_sample(tup):
             
 def sample_wikipedia(vocab, vocab_name): 
     '''
-    Finds occurrences of vocab words in wikipedia
+    Finds occurrences of vocab words in wikipedia. 
+    
+    Note: the adjectives in "adj_lines.json" have "xqxq"
+    instead of "-" to account for dashed words for tokenization. 
     '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
@@ -345,7 +348,8 @@ def sample_random_contexts(axis, adj_lines):
     axis_lines = set()
     for adj in axis: 
         for line in adj_lines[adj]: 
-            axis_lines.add((adj, line))
+            a = adj.replace('xqxq', '-')
+            axis_lines.add((a, line))
     axis_lines = random.sample(axis_lines, 100)
     return axis_lines
 
