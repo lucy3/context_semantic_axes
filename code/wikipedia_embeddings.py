@@ -75,7 +75,7 @@ def get_content_lines(line):
         return False
     line_content = not line.startswith('{{') and not line.startswith('<') and \
         not line.startswith('=') and not line.startswith('*') and not line.startswith('#') and \
-        not line.startswith(';') and line.startswith(':')
+        not line.startswith(';') and not line.startswith(':')
     if not line_content: 
         return False
     try: 
