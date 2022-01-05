@@ -12,6 +12,7 @@ from functools import partial
 from collections import Counter, defaultdict
 import random
 import torch
+from nltk import tokenize
 import numpy as np
 
 ROOT = '/mnt/data0/lucy/manosphere/'
@@ -46,28 +47,35 @@ def contains_vocab(tup, tokenizer=None, vocab=set()):
     '''
     Input: [(line, line_id)]
     Output: [(vocab_token1, line_id), (vocab_token2, line_id)]
+    
+    Since BERT was originally made for sentence level tasks, we split Wikipedia into sentences,
+    and for efficiency, keep those that are > 10 words and < 150 words long.
     '''
-    # more conservative cutoff in search to account for wordpieces
     line, line_id = tup
-    try: 
-        line = wtp.remove_markup(line)
-    except AttributeError: 
-        # some short lines with url breaks wtp
-        print("####ERROR", line)
-        return []
+    line = wtp.remove_markup(line)
     line = line.replace('-', 'xqxq')
     tokens = tokenizer.tokenize(line)
+    if len(tokens) < 10 or len(tokens) > 150: 
+        return []
     overlap = set(tokens) & vocab
     ret = []
     for w in overlap: 
         ret.append((w, line_id))
     return ret
 
-def get_content_lines(line, tokenizer=None): 
+def get_content_lines(line): 
+    '''
+    If you need to rerun wikipedia sampling multiple times, a speed up could be
+    to tokenize only once with wordpiece tokenizer, join using spaces, re replace
+    ' ##' (next to non-white space boundary) with ''. Then can run whitespace tokenizer. 
+    '''
     # only get wikitext content
     line = line.strip()
+    if len(line) < 10:
+        return False
     line_content = not line.startswith('{{') and not line.startswith('<') and \
-        not line.startswith('==')
+        not line.startswith('=') and not line.startswith('*') and not line.startswith('#') and \
+        not line.startswith(';') and line.startswith(':')
     if not line_content: 
         return False
     try: 
@@ -76,9 +84,7 @@ def get_content_lines(line, tokenizer=None):
         # one line with a url breaks wtp
         print("####ERROR", line)
         return False
-    tokens = tokenizer.tokenize(line)
-    line_len = len(tokens) <= 510 and len(tokens) > 10
-    return line_len
+    return True
 
 def exact_sample(tup): 
     w = tup[0]
@@ -87,6 +93,11 @@ def exact_sample(tup):
         return tup
     else: 
         return (tup[0], random.sample(occur, 1000))
+    
+def get_sentences(line): 
+    line = wtp.remove_markup(line)
+    sents = tokenize.sent_tokenize(line)
+    return sents
             
 def sample_wikipedia(vocab, vocab_name): 
     '''
@@ -109,8 +120,8 @@ def sample_wikipedia(vocab, vocab_name):
     wikipedia_file = '/mnt/data0/corpora/wikipedia/enwiki-20211101-pages-meta-current.xml'
     #wikipedia_file = '/mnt/data0/corpora/wikipedia/small_wiki'
     tokenizer = BasicTokenizer(do_lower_case=True)
-    wp_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    data = sc.textFile(wikipedia_file).filter(partial(get_content_lines, tokenizer=wp_tokenizer))
+    data = sc.textFile(wikipedia_file).filter(get_content_lines)
+    data = data.flatMap(get_sentences)
     data = data.zipWithUniqueId() 
     token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=new_vocab))
     token_counts = token_data.map(lambda tup: (tup[0], 1)).reduceByKey(lambda n1, n2: n1 + n2)
@@ -385,9 +396,9 @@ def get_axes_contexts():
 def main(): 
     vocab = get_adj()
     sample_wikipedia(vocab, 'adj')
+    #get_axes_contexts()
     #get_adj_embeddings()
     #get_bert_mean_std()
-    #get_axes_contexts()
 
 if __name__ == '__main__':
     main()
