@@ -37,11 +37,17 @@ def get_adj():
             axes_vocab.update(axis2)
     return axes_vocab
     
-def get_occupations(): 
+def get_occupation_embeddings(): 
     '''
-    Read in occupation words
+    For each stretch of wikitext, get BERT embeddings
+    of occupation words
     '''
-    pass
+    with open(DATA + 'semantics/occupation_wikipages.json', 'r'
+    # read in wikitext json
+    # for each word
+    # keep only bigrams and unigrams
+    # batch data 
+    # get average embedding
 
 def contains_vocab(tup, tokenizer=None, vocab=set()): 
     '''
@@ -52,7 +58,6 @@ def contains_vocab(tup, tokenizer=None, vocab=set()):
     and for efficiency, keep those that are > 10 words and < 150 words long.
     '''
     line, line_id = tup
-    line = wtp.remove_markup(line)
     line = line.replace('-', 'xqxq')
     tokens = tokenizer.tokenize(line)
     if len(tokens) < 10 or len(tokens) > 150: 
@@ -65,24 +70,17 @@ def contains_vocab(tup, tokenizer=None, vocab=set()):
 
 def get_content_lines(line): 
     '''
-    If you need to rerun wikipedia sampling multiple times, a speed up could be
-    to tokenize only once with wordpiece tokenizer, join using spaces, re replace
-    ' ##' (next to non-white space boundary) with ''. Then can run whitespace tokenizer. 
+    There are a lot of if statements here
+    because I want to return False as fast as possible. 
     '''
     # only get wikitext content
     line = line.strip()
     if len(line) < 10:
         return False
-    line_content = not line.startswith('{{') and not line.startswith('<') and \
-        not line.startswith('=') and not line.startswith('*') and not line.startswith('#') and \
-        not line.startswith(';') and not line.startswith(':')
-    if not line_content: 
-        return False
-    try: 
-        line = wtp.remove_markup(line)
-    except AttributeError: 
-        # one line with a url breaks wtp
-        print("####ERROR", line)
+    line_content = line.startswith('{{') or line.startswith('<') or \
+        line.startswith('=') or line.startswith('*') or line.startswith('#') or \
+        line.startswith(';') or line.startswith(':')
+    if line_content: 
         return False
     return True
 
@@ -95,7 +93,12 @@ def exact_sample(tup):
         return (tup[0], random.sample(occur, 1000))
     
 def get_sentences(line): 
-    line = wtp.remove_markup(line)
+    try: 
+        line = wtp.remove_markup(line)
+    except AttributeError: 
+        # some lines with urls break wtp
+        print("####ERROR", line)
+        return []
     sents = tokenize.sent_tokenize(line)
     return sents
             
@@ -121,7 +124,7 @@ def sample_wikipedia(vocab, vocab_name):
     #wikipedia_file = '/mnt/data0/corpora/wikipedia/small_wiki'
     tokenizer = BasicTokenizer(do_lower_case=True)
     data = sc.textFile(wikipedia_file).filter(get_content_lines)
-    data = data.flatMap(get_sentences)
+    data = data.flatMap(get_sentences).filter(lambda sent: len(sent.split()) > 10)
     data = data.zipWithUniqueId() 
     token_data = data.flatMap(partial(contains_vocab, tokenizer=tokenizer, vocab=new_vocab))
     token_counts = token_data.map(lambda tup: (tup[0], 1)).reduceByKey(lambda n1, n2: n1 + n2)
@@ -163,6 +166,9 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
     return ret
     
 def batch_adj_data(): 
+    '''
+    Batches data for get_adj_embeddings()
+    '''
     vocab = get_adj()
     vocab_name = 'adj'
     with open(LOGS + 'wikipedia/' + vocab_name + '_lines_random.json', 'r') as infile:
