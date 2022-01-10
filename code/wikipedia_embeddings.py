@@ -4,10 +4,9 @@ For getting BERT embeddings of key words from wikipedia
 import requests
 import json
 from tqdm import tqdm
-import wikitextparser as wtp
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
-from pyspark import SparkConf, SparkContext
-from pyspark.sql import Row, SQLContext
+#from pyspark import SparkConf, SparkContext
+#from pyspark.sql import Row, SQLContext
 from functools import partial
 from collections import Counter, defaultdict
 import random
@@ -42,7 +41,8 @@ def get_occupation_embeddings():
     For each stretch of wikitext, get BERT embeddings
     of occupation words
     '''
-    with open(DATA + 'semantics/occupation_wikipages.json', 'r'
+    with open(DATA + 'semantics/occupation_wikipages.json', 'r') as infile: 
+        occ_pages = json.load(infile)
     # read in wikitext json
     # for each word
     # keep only bigrams and unigrams
@@ -77,9 +77,7 @@ def get_content_lines(line):
     line = line.strip()
     if len(line) < 10:
         return False
-    line_content = line.startswith('{{') or line.startswith('<') or \
-        line.startswith('=') or line.startswith('*') or line.startswith('#') or \
-        line.startswith(';') or line.startswith(':')
+    line_content = line.startswith('<doc') or line.startswith('</doc')
     if line_content: 
         return False
     return True
@@ -93,13 +91,7 @@ def exact_sample(tup):
         return (tup[0], random.sample(occur, 1000))
     
 def get_sentences(line): 
-    try: 
-        line = wtp.remove_markup(line)
-    except AttributeError: 
-        # some lines with urls break wtp
-        print("####ERROR", line)
-        return []
-    sents = tokenize.sent_tokenize(line)
+    sents = tokenize.sent_tokenize(line.strip())
     return sents
             
 def sample_wikipedia(vocab, vocab_name): 
@@ -120,7 +112,7 @@ def sample_wikipedia(vocab, vocab_name):
         else: 
             new_vocab.add(w)
 
-    wikipedia_file = '/mnt/data0/corpora/wikipedia/enwiki-20211101-pages-meta-current.xml'
+    wikipedia_file = '/mnt/data0/corpora/wikipedia/text/all_files.txt'
     #wikipedia_file = '/mnt/data0/corpora/wikipedia/small_wiki'
     tokenizer = BasicTokenizer(do_lower_case=True)
     data = sc.textFile(wikipedia_file).filter(get_content_lines)
@@ -145,12 +137,6 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
     This is deprecated. 
     '''
     # more conservative cutoff in search to account for wordpieces
-    try: 
-        line = wtp.remove_markup(line)
-    except AttributeError: 
-        # one line with a url breaks wtp
-        print("####ERROR", line)
-        return []
     tokens = tokenizer.tokenize(line)
     counts = Counter(tokens)
     wspace_tokens = line.lower().split()
@@ -185,21 +171,19 @@ def batch_adj_data():
             contents = line.split('\t')
             line_num = contents[0]
             if line_num not in lines_tokens: continue
-            text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text).lower()
+            text = '\t'.join(contents[1:]).lower()
             words_in_line = lines_tokens[line_num]
             vocab.update(words_in_line)
-            dash_words = set()
+            dashed_words = set()
             for w in words_in_line: 
-                if '-' in w:  
-                    sub_w = w.replace('-', 'xqxq')
-                    dash_words.add(sub_w)
-                    text = text.replace(w, sub_w)
+                if '-' in w: 
+                    new_w = w.replace('-', 'xqxq')
+                    text = text.replace(w, new_w)
+                    dashed_words.add(new_w)
             tokens = btokenizer.tokenize(text)
-            if dash_words: 
-                for i in range(len(tokens)): 
-                    if tokens[i] in dash_words: 
-                        tokens[i] = tokens[i].replace('xqxq', '-')
+            for i in range(len(tokens)): 
+                if tokens[i] in dashed_words:
+                    tokens[i] = tokens[i].replace('xqxq', '-')
             curr_batch.append(tokens)
             curr_words.append(words_in_line)
             if len(curr_batch) == batch_size: 
@@ -253,8 +237,8 @@ def get_adj_embeddings():
                 word_embed = vector[j][token_ids_word]
                 word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
                 if np.isnan(word_embed).any(): 
-                    print(word, batch[j])
-                    return
+                    print("PROBLEM!!!", word, batch[j])
+                    return # TODO: fix this
                 word_reps[word] += word_embed
                 word_counts[word] += 1
     res = {}
@@ -280,8 +264,7 @@ def get_bert_mean_std():
         for line in infile:
             if random.randrange(100) > prob: continue
             contents = line.split('\t')
-            text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text).lower()
+            text = '\t'.join(contents[1:]).lower()
             curr_batch.append(text)
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
@@ -362,11 +345,16 @@ def count_axes():
         json.dump(synset_counts, outfile)
 
 def sample_random_contexts(axis, adj_lines): 
+    '''
+    Adj that have '-' in adj_lines are replaced
+    with xqxq so in order to match them to the adj
+    in wordnet_axes, we need to replace and then compare.
+    '''
     axis_lines = set()
-    for adj in axis: 
-        for line in adj_lines[adj]: 
-            a = adj.replace('xqxq', '-')
-            axis_lines.add((a, line))
+    for adj in axis:
+        a = adj.replace('-', 'xqxq') 
+        for line in adj_lines[a]: 
+            axis_lines.add((adj, line))
     axis_lines = random.sample(axis_lines, 100)
     return axis_lines
 
@@ -400,11 +388,13 @@ def get_axes_contexts():
         json.dump(ret, outfile)
 
 def main(): 
-    vocab = get_adj()
-    sample_wikipedia(vocab, 'adj')
+    #vocab = get_adj()
+    #sample_wikipedia(vocab, 'adj')
     #get_axes_contexts()
+    #print("----------------------")
     #get_adj_embeddings()
-    #get_bert_mean_std()
+    #print("**********************")
+    get_bert_mean_std()
 
 if __name__ == '__main__':
     main()

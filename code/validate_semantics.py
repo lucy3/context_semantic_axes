@@ -570,7 +570,7 @@ def get_bert_vecs(exp_name='bert-default'):
 def inspect_axes(exp_name): 
     axes, axes_vocab = load_wordnet_axes()
     vocab = set()
-    if exp_name in ['kbest', 'scaler', 'pca']: 
+    if exp_name in ['default', 'kbest', 'scaler', 'pca']: 
         vec_dict = get_glove_vecs(vocab, axes_vocab)
         loo_val(vec_dict, axes, exp_name)
     elif exp_name in ['bert-default', 'bert-zscore']: 
@@ -578,10 +578,11 @@ def inspect_axes(exp_name):
         loo_val(vec_dict, axes, exp_name)
     
 def main(): 
-    prep_datasets()
+#     prep_datasets()
 #     retrieve_wordnet_axes()
-#     inspect_axes('bert-default')
-#     inspect_axes('bert-zscore')
+     inspect_axes('default')
+     #inspect_axes('bert-default')
+     #inspect_axes('bert-zscore')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
 #     lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')

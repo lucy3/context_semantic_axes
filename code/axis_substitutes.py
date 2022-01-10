@@ -10,7 +10,6 @@ import torch
 from transformers import BertTokenizerFast, RobertaTokenizerFast, BertForMaskedLM, RobertaForMaskedLM
 from tqdm import tqdm
 import time
-import wikitextparser as wtp
 import json
 from collections import defaultdict, Counter
 
@@ -57,12 +56,11 @@ def batch_data(lines_adj, tokenizer):
     curr_batch = [] # list of list of tokens
     curr_idx = [] # list of masked_index
     curr_metadata = [] # (line_ID, adj)
-    with open(LOGS + 'wikipedia/temp_adj_data/part-00000', 'r') as infile: # TODO: change to correct file
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in tqdm(infile, total=num_lines):
             contents = line.split('\t')
             line_num = contents[0]
-            text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text).lower()
+            text = '\t'.join(contents[1:]).lower()
             words_in_line = lines_adj[line_num]
             
             tokens = tokenizer.tokenize(text) # wordpiece tokens
@@ -83,8 +81,6 @@ def batch_data(lines_adj, tokenizer):
                             curr_idx = []
                             curr_metadata = []
                         break # target word found
-            if len(batch_sentences) == 400: 
-                break # TODO: remove
     if len(curr_batch) != 0: # fence post
         batch_sentences.append(curr_batch)
         batch_idx.append(curr_idx)
@@ -133,6 +129,7 @@ def find_good_contexts(model_name):
     good_line_scores = defaultdict(tuple)
     bad_line_scores = defaultdict(tuple)
     total = 0
+    good_score_counts = Counter()
     with open(LOGS + 'wikipedia/substitutes/' + model_name + '.csv', 'r') as infile: 
         for line in infile: 
             total += 1
@@ -147,36 +144,38 @@ def find_good_contexts(model_name):
             syn_overlap = preds & synonyms[adj]
             if len(syn_overlap) == 0: continue
             score = len(syn_overlap)
+            good_score_counts[score] += 1
             good_line_scores[line_ID] = (adj, score, syn_overlap)
-          
-    print(len(good_line_scores), total)
-    print(good_line_scores)
-    print()
-    print(len(bad_line_scores), total)
-    print(bad_line_scores)
-    print()
-    
-    return
 
-    with open(LOGS + 'wikipedia/temp_adj_data/part-00000', 'r') as infile: # TODO: change to correct file
+#     print(len(good_line_scores), total)
+#     print(good_score_counts.most_common())
+#     #print(good_line_scores)
+#     print()
+#     print(len(bad_line_scores), total)
+#     #print(bad_line_scores)
+#     print()
+    
+#     return
+
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in infile:
             contents = line.split('\t')
             line_num = contents[0]
-            text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text).lower()
-            if line_num in bad_line_scores: 
-                adj, score, overlap = bad_line_scores[line_num]
-                print(adj, score, overlap, "-------------", text)
-#             if line_num in good_line_scores: 
-#                 adj, score, overlap = good_line_scores[line_num]
+            text = '\t'.join(contents[1:]).lower()
+#             if line_num in bad_line_scores: 
+#                 adj, score, overlap = bad_line_scores[line_num]
 #                 print(adj, score, overlap, "-------------", text)
+            if line_num in good_line_scores: 
+                adj, score, overlap = good_line_scores[line_num]
+                if score < 2: continue
+                print(adj, score, overlap, "-------------", text)
 
 def main(): 
-    predict_substitutes('bert-base-uncased')
+    #predict_substitutes('bert-base-uncased')
     #predict_substitutes('bert-large-uncased')
     # TODO: roberta is broken currently due to tokenization issues
     #predict_substitutes('roberta-base')
-    #find_good_contexts('bert-base-uncased')
+    find_good_contexts('bert-base-uncased')
     #find_good_contexts('bert-large-uncased')
 
 if __name__ == '__main__':
