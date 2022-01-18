@@ -9,7 +9,6 @@ import requests
 import json
 import copy
 from tqdm import tqdm
-import wikitextparser as wtp
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
 from functools import partial
 from collections import Counter, defaultdict
@@ -36,8 +35,7 @@ def get_coocur_counts(line, tokenizer=None, lines_adj=None):
     contents = line.split('\t')
     line_num = contents[0]
     words_in_line = lines_adj[line_num]
-    text = '\t'.join(contents[1:])
-    text = wtp.remove_markup(text).lower()
+    text = '\t'.join(contents[1:]).lower()
     # account for dashed words
     text = text.replace('-', 'xqxq')
     tokens = tokenizer.tokenize(text)
@@ -54,7 +52,6 @@ def get_adj_word_counts():
     '''
     Input: wikipedia data
     Output: {adj : { w : total count in that adj's lines} }
-    This could be rewritten using Spark to speed it up. 
     '''
     from pyspark import SparkConf, SparkContext
     from pyspark.sql import Row, SQLContext
@@ -179,7 +176,7 @@ def get_high_npmi_lines():
     This function was ABANDONED because the npmi
     scores were not helpful. 
     '''
-    file_name = 'educated.a.01.json'
+    file_name = 'violent.a.01.json'
     npmi_scores_file = LOGS + 'wikipedia/npmi_scores/' + file_name
     btokenizer = BasicTokenizer(do_lower_case=True)
     
@@ -221,8 +218,7 @@ def get_high_npmi_lines():
             line_ID = int(contents[0])
             if line_ID not in corpora_left and line_ID not in corpora_right: 
                 continue
-            text = '\t'.join(contents[1:])
-            text = wtp.remove_markup(text).replace('-', 'xqxq').lower()
+            text = '\t'.join(contents[1:]).replace('-', 'xqxq').lower()
             tokens = btokenizer.tokenize(text)
             lines2tokens[line_ID] = tokens
             if line_ID in corpora_left: 
@@ -277,8 +273,8 @@ def inspect_npmi_scores():
 def main(): 
     #get_adj_word_counts()
     #get_npmi_axes_contexts()
-    #get_high_npmi_lines()
-    inspect_npmi_scores()
+    get_high_npmi_lines()
+    #inspect_npmi_scores()
     
 if __name__ == '__main__':
     main()

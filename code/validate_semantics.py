@@ -14,6 +14,7 @@ from sklearn.decomposition import PCA
 from scipy import spatial
 import math
 from sklearn.feature_selection import SelectKBest, f_classif, SelectPercentile
+import requests
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -60,8 +61,7 @@ def occupations():
     Occupations from labour bureau and wikipedia
     '''
     data_file = DATA + 'semantics/job_demographics.csv'
-    classes = {'gender' : {'high': [], 'low': []}, 
-               'stem' : {'high': [], 'low': []},
+    classes = {'stem' : {'high': [], 'low': []},
                'art' : {'high': [], 'low': []},
                'health' : {'high': [], 'low': []}, 
                 }
@@ -85,13 +85,6 @@ def occupations():
             elif job == 'protective service occupations': 
                 health = False
             if len(job.split()) < 3: 
-                if row['Women'] != '–':
-                    fem_percent = float(row['Women'])
-                    if fem_percent < 25: 
-                        classes['gender']['high'].append(job)
-                    elif fem_percent > 75: 
-                        classes['gender']['low'].append(job)
-                
                 if stem: 
                     classes['stem']['high'].append(job)
                 else: 
@@ -106,14 +99,12 @@ def occupations():
                     classes['health']['low'].append(job)
     
     for clss in classes: 
-        if clss == 'gender': continue
         with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
             for line in infile: 
                 if line.startswith('#'): continue
                 job = line.strip().lower()
                 if len(job.split()) >= 3: continue
                 for other_clss in classes: 
-                    if other_clss == 'gender': continue
                     if clss == other_clss: 
                         classes[other_clss]['high'].append(job)
                     else: 
@@ -124,9 +115,6 @@ def occupations():
         classes[clss]['high'] = list(set(classes[clss]['high']))
         classes[clss]['low'] = list(set(classes[clss]['low']))
     
-    print(classes['gender']['high'])
-    print(classes['gender']['low'])
-    print()
     print(classes['stem']['high'])
     print()
     print(classes['art']['high'])
@@ -134,10 +122,39 @@ def occupations():
     print(classes['health']['high'])
     with open(DATA + 'semantics/cleaned/occupations.json', 'w') as outfile:
         json.dump(classes, outfile)
+        
+def get_occupation_pages(): 
+    '''
+    For each occupation, get its wikipedia page and download wikitext
+    Some occupations do not have a wikipedia page, in which
+    case we leave them out. 
+    '''
+    classes = ['stem', 'art', 'health']
+    wiki_pages = {} # title : request response
+    for clss in classes: 
+        with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
+            for line in infile: 
+                if line.startswith('#http'): continue
+                if line.startswith('#'): 
+                    curr_cat = line.strip()
+                else: 
+                    wiki_title = line.strip().lower()
+                    response = requests.get('https://en.wikipedia.org/w/api.php?action=parse&page=' + wiki_title + '&prop=wikitext&formatversion=2&format=json&redirects')
+                    if not response.ok: 
+                        print("Problem with", wiki_title)
+                    response_dict = json.loads(response.text)
+                    if 'error' in response_dict: 
+                        print("Problem with", wiki_title, response_dict)
+                    else: 
+                        wikitext = response_dict['parse']['wikitext']
+                        wiki_pages[wiki_title] = wikitext
+    with open(DATA + 'semantics/occupation_wikipages.json', 'w') as outfile: 
+        json.dump(wiki_pages, outfile)         
     
 def prep_datasets():
     #nrc_vad()
-    occupations()
+    #occupations()
+    get_occupation_pages()
     
 def get_semaxes(): 
     '''
@@ -553,7 +570,7 @@ def get_bert_vecs(exp_name='bert-default'):
 def inspect_axes(exp_name): 
     axes, axes_vocab = load_wordnet_axes()
     vocab = set()
-    if exp_name in ['kbest', 'scaler', 'pca']: 
+    if exp_name in ['default', 'kbest', 'scaler', 'pca']: 
         vec_dict = get_glove_vecs(vocab, axes_vocab)
         loo_val(vec_dict, axes, exp_name)
     elif exp_name in ['bert-default', 'bert-zscore']: 
@@ -561,9 +578,11 @@ def inspect_axes(exp_name):
         loo_val(vec_dict, axes, exp_name)
     
 def main(): 
+#     prep_datasets()
 #     retrieve_wordnet_axes()
-    inspect_axes('bert-default')
-    inspect_axes('bert-zscore')
+     inspect_axes('default')
+     #inspect_axes('bert-default')
+     #inspect_axes('bert-zscore')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
 #     lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
