@@ -60,6 +60,7 @@ def nrc_vad():
 def occupations(): 
     '''
     Occupations from labour bureau and wikipedia
+    TODO: rewrite
     '''
     data_file = DATA + 'semantics/job_demographics.csv'
     classes = {'stem' : {'high': [], 'low': []},
@@ -235,7 +236,13 @@ def load_wordnet_axes():
     return axes, axes_vocab
 
 def get_pole_matrix(glove_vecs, axes): 
-    
+    '''
+    @input: 
+    - glove vectors, wordnet axes
+    @output: 
+    - a matrix of wordnet axes where each row is a pole
+    - axes_order.txt: the pole that each row of the matrix refers to
+    '''
     poles = []
     adj_matrix = []
     for pole in sorted(axes.keys()): 
@@ -269,6 +276,10 @@ def get_pole_matrix(glove_vecs, axes):
     np.save(LOGS + 'semantics_val/wordnet_axes.npy', adj_matrix)
     
 def get_poles(vec_dict, axes): 
+    '''
+    @output: 
+    - a dictionary of each synset and the vectors that are part of each pole
+    '''
     adj_poles = {} # synset : (right_vec, left_vec)
     for pole in sorted(axes.keys()): 
         left = axes[pole][0]
@@ -291,6 +302,9 @@ def get_poles(vec_dict, axes):
     return adj_poles
 
 def get_glove_vecs(vocab, axes_vocab): 
+    '''
+    - get glove representations of a vocab, e.g. occupations
+    '''
     bigram_tokens = set()
     for w in vocab: 
         tokens = w.split()
@@ -318,6 +332,10 @@ def get_glove_vecs(vocab, axes_vocab):
     return glove_vecs
 
 def save_inputs_from_json(file_path, lexicon_name): 
+    '''
+    For a lexicon that has scores for different words,
+    saves vectors associated with that lexicon.
+    '''
     with open(file_path, 'r') as infile:
         lexicon_dict = json.load(infile)
     vocab = set()
@@ -362,59 +380,6 @@ def load_inputs(file_path, lexicon_name):
         word_matrices[c] = np.load(LOGS + 'semantics_val/' + lexicon_name + '/' + c + '_words.npy')
 
     return adj_matrix, score_matrices, word_matrices
-            
-def lda_glove(file_path, lexicon_name):
-    with open(file_path, 'r') as infile:
-        lexicon_dict = json.load(infile)
-    vocab = set()
-    for c in lexicon_dict: 
-        for score in lexicon_dict[c]: 
-            vocab.update(lexicon_dict[c][score])
-    axes, axes_vocab = load_wordnet_axes()
-    glove_vecs = get_glove_vecs(vocab, axes_vocab)
-    adj_poles = get_poles(glove_vecs, axes)
-    _, score_matrices, word_matrices = load_inputs(file_path, lexicon_name)
-    biases = defaultdict(dict) # {c : { pole : (bias_sep, effect, bias1, bias2)} }
-    models = {} # pole : (clf, scaler, pca)
-    for pole in adj_poles: 
-        left_vecs, right_vecs = adj_poles[pole]
-        this_adj_matrix = np.concatenate((left_vecs, right_vecs), axis=0)
-        this_adj_scores = [1] * left_vecs.shape[0] + [0] * right_vecs.shape[0]
-
-        clf = LinearDiscriminantAnalysis(solver='eigen', shrinkage='auto')
-        scaler = StandardScaler()
-        this_adj_matrix = scaler.fit_transform(this_adj_matrix)
-#         if this_adj_matrix.shape[0] < this_adj_matrix.shape[1]: 
-#             pca = PCA(n_components=this_adj_matrix.shape[0])
-#             this_adj_matrix = pca.fit_transform(this_adj_matrix)
-#         else: 
-#             pca = None
-        pca = PCA(n_components=5)
-        this_adj_matrix = pca.fit_transform(this_adj_matrix)
-        clf.fit(this_adj_matrix, this_adj_scores)
-        models[pole] = (clf, scaler, pca)
-    
-    for c in lexicon_dict: 
-        score_matrix = score_matrices[c]
-        word_matrix = word_matrices[c]
-        print(c)
-        
-        for pole in adj_poles: 
-            clf, scaler, pca = models[pole]
-                
-            this_word_matrix = scaler.transform(word_matrix)
-            if pca is not None: 
-                this_word_matrix = pca.transform(this_word_matrix)
-            this_word_matrix = clf.transform(this_word_matrix)
-            class1 = this_word_matrix[score_matrix == 0]
-            class2 = this_word_matrix[score_matrix == 1]
-            bias1 = np.mean(class1)
-            bias2 = np.mean(class2)
-            bias_sep = abs(bias1 - bias2)
-            biases[c][pole] = (bias_sep, 0, bias1, bias2)
-
-    with open(LOGS + 'semantics_val/' + lexicon_name + '/lda.json', 'w') as outfile:
-        json.dump(biases, outfile)
         
 def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''): 
     with open(file_path, 'r') as infile:
@@ -511,23 +476,10 @@ def loo_val_helper(arr, left_vec, right_vec, exp_name):
     if math.isnan(sim): print(microframe, arr, sim)
     return sim
 
-def loo_val_helper2(arr, left_vec, right_vec, exp_name):
-    '''
-    This calculates the similarity of the arr vector
-    to the left pole and then its similarity to the right pole,
-    and returns the difference. The goal here is that the similarity
-    of the vector should be higher for the right if it belongs to the right,
-    and higher for the left if it belongs to the left. 
-    '''
-    left_pole = left_vec.mean(axis=0)
-    right_pole = right_vec.mean(axis=0)
-    sim_left = 1 - spatial.distance.cosine(arr, left_pole)
-    sim_right = 1 - spatial.distance.cosine(arr, right_pole)
-    if math.isnan(sim_left) or math.isnan(sim_right): 
-        print(microframe, arr, sim_left, sim_right)
-    return sim_right - sim_left
-
 def loo(pole, left_vec, right_vec, right_vocab, left_vocab, outfile, exp_name): 
+    '''
+    called by loo_val_static() and loo_val()
+    '''
     left_vec = np.ma.array(left_vec, mask=False)
     right_vec = np.ma.array(right_vec, mask=False)
     for i in range(left_vec.shape[0]): 
@@ -535,10 +487,7 @@ def loo(pole, left_vec, right_vec, right_vocab, left_vocab, outfile, exp_name):
         mask[i] = False
         new_left = left_vec[mask,:]
         arr = left_vec[i]
-        if 'prox' in exp_name: 
-            sim = loo_val_helper2(arr, new_left, right_vec, exp_name=exp_name)
-        else: 
-            sim = loo_val_helper(arr, new_left, right_vec, exp_name=exp_name)
+        sim = loo_val_helper(arr, new_left, right_vec, exp_name=exp_name)
         outfile.write(pole + '\t' + left_vocab[i] + '\t' + str(sim) + '\tleft\n')
 
     for i in range(right_vec.shape[0]): 
@@ -546,10 +495,7 @@ def loo(pole, left_vec, right_vec, right_vocab, left_vocab, outfile, exp_name):
         mask[i] = False
         new_right = right_vec[mask,:]
         arr = right_vec[i]
-        if 'prox' in exp_name: 
-            sim = loo_val_helper2(arr, left_vec, new_right, exp_name=exp_name)
-        else: 
-            sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
+        sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
         outfile.write(pole + '\t' + right_vocab[i]
                       + '\t' + str(sim) + '\tright\n')
         
@@ -616,6 +562,7 @@ def get_bert_vecs(exp_name='bert-default'):
 
 def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name, singleton_subs): 
     '''
+    Gets vectors for one side of a synset. 
     @outputs
     side_vec: np.ma.array where each row is a vector
     rep_keys_map: { word : [indices that make up the word's agg vector] } 
@@ -718,15 +665,12 @@ def main():
     #inspect_axes('bert-base-sub')
     inspect_axes('bert-base-sub-mask')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-#     save_inputs_from_json(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
-#     lda_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='pca')
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='pca')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='scaler')
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='scaler')
-#     lda_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
     #prep_datasets()
 
 if __name__ == '__main__':
