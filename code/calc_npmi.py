@@ -211,7 +211,7 @@ def get_high_npmi_lines():
     left_line_scores = Counter()
     right_line_scores = Counter()
     lines2tokens = {}
-    wikipedia_file = LOGS + 'wikipedia/temp_adj_data/part-00000' # TODO: change to adj_data
+    wikipedia_file = LOGS + 'wikipedia/adj_data/part-00000' # TODO: change to adj_data
     with open(wikipedia_file, 'r') as infile: 
         for line in infile: 
             contents = line.split('\t') 

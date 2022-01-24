@@ -13,6 +13,8 @@ import random
 import torch
 from nltk import tokenize
 import numpy as np
+import os
+import copy
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -151,29 +153,30 @@ def count_vocab_words(line, tokenizer=None, vocab=set()):
             ret.append((w, counts[w]))
     return ret
     
-def batch_adj_data(): 
+def batch_adj_data(input_json, exp_name): 
     '''
     Batches data for get_adj_embeddings()
     '''
-    vocab = get_adj()
-    vocab_name = 'adj'
-    with open(LOGS + 'wikipedia/' + vocab_name + '_lines_random.json', 'r') as infile:
-        lines_tokens = json.load(infile) # {line_num: [vocab words in line]}
+    with open(input_json, 'r') as infile:
+        lines_tokens = json.load(infile) # {line_num: [(adj, synset)]}
     batch_size = 8
     batch_sentences = [] # each item is a list
     batch_words = [] # each item is a list
+    batch_tups = []
     curr_batch = []
     curr_words = []
+    curr_tups = []
     btokenizer = BasicTokenizer(do_lower_case=True)
     vocab = set()
-    with open(LOGS + 'wikipedia/' + vocab_name + '_data/part-00000', 'r') as infile: 
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in infile:
             contents = line.split('\t')
             line_num = contents[0]
             if line_num not in lines_tokens: continue
             text = '\t'.join(contents[1:]).lower()
-            words_in_line = lines_tokens[line_num]
-            vocab.update(words_in_line)
+            words_in_line = [t[0] for t in lines_tokens[line_num]]
+            tups_in_line = [(line_num, t[0], t[1]) for t in lines_tokens[line_num]]
+            vocab.update(tups_in_line)
             dashed_words = set()
             for w in words_in_line: 
                 if '-' in w: 
@@ -181,29 +184,59 @@ def batch_adj_data():
                     text = text.replace(w, new_w)
                     dashed_words.add(new_w)
             tokens = btokenizer.tokenize(text)
-            for i in range(len(tokens)): 
-                if tokens[i] in dashed_words:
-                    tokens[i] = tokens[i].replace('xqxq', '-')
-            curr_batch.append(tokens)
-            curr_words.append(words_in_line)
-            if len(curr_batch) == batch_size: 
-                batch_sentences.append(curr_batch)
-                batch_words.append(curr_words)
-                curr_batch = []
-                curr_words = []
+            if 'mask' in exp_name: 
+                # replace target word with [MASK]
+                for i in range(len(tokens)): 
+                    if tokens[i] in dashed_words or tokens[i] in words_in_line: 
+                        new_tokens = copy.deepcopy(tokens)
+                        new_tokens[i] = '[MASK]'
+                        curr_batch.append(new_tokens)
+                        curr_words.append(words_in_line)
+                        curr_tups.append(tups_in_line)
+                        if len(curr_batch) == batch_size: 
+                            batch_sentences.append(curr_batch)
+                            batch_words.append(curr_words)
+                            batch_tups.append(curr_tups)
+                            curr_batch = []
+                            curr_words = []
+                            curr_tups = []                
+            else: 
+                for i in range(len(tokens)): 
+                    if tokens[i] in dashed_words:
+                        tokens[i] = tokens[i].replace('xqxq', '-')
+                curr_batch.append(tokens)
+                curr_words.append(words_in_line)
+                curr_tups.append(tups_in_line)
+                if len(curr_batch) == batch_size: 
+                    batch_sentences.append(curr_batch)
+                    batch_words.append(curr_words)
+                    batch_tups.append(curr_tups)
+                    curr_batch = []
+                    curr_words = []
+                    curr_tups = []
         if len(curr_batch) != 0: # fence post
             batch_sentences.append(curr_batch)
             batch_words.append(curr_words)
-    return batch_sentences, batch_words, vocab
+            batch_tups.append(curr_tups)
+    return batch_sentences, batch_words, batch_tups, vocab
 
-def get_adj_embeddings(): 
+def get_adj_embeddings(exp_name, save_agg=True): 
     '''
     This function gets embeddings for adjectives in Wikipedia
     This is slightly messy because adjectives in Wordnet 
     can be multiple words. 
+    The boolean save_agg saves aggregate word embeddings (averaged
+    for each word in each synset), or it stacks each individual 
+    vector into an array (more memory intensive). 
     '''
+    if exp_name.startswith('bert-base-sub'): 
+        input_json = LOGS + 'wikipedia/adj_lines_base-substitutes.json'
+    elif exp_name.startswith('bert-large-sub'): 
+        input_json = LOGS + 'wikipedia/adj_lines_large-substitutes.json'
+    elif exp_name == 'bert-default': 
+        input_json = LOGS + 'wikipedia/adj_lines_random.json'
     print("Batching contexts...")
-    batch_sentences, batch_words, vocab = batch_adj_data()
+    batch_sentences, batch_words, batch_tups, vocab = batch_adj_data(input_json, exp_name)
     print("Getting model...")
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
     model = BertModel.from_pretrained('bert-base-uncased')
@@ -211,10 +244,15 @@ def get_adj_embeddings():
     model.to(device)
     model.eval()
     # initialize word representations
-    word_reps = {}
-    for w in vocab: 
-        word_reps[w] = np.zeros(3072)
-    word_counts = Counter()
+    if save_agg: 
+        word_reps = {}
+        for tup in vocab: 
+            word_reps[tup] = np.zeros(3072)
+        word_counts = Counter()
+    else: 
+        word_reps = defaultdict(list) # {ss : [numpy arrays]}
+        # {ss : [(line_num, adj)]} where index corresponds to vector in word_reps 
+        word_rep_keys = defaultdict(list) 
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
         word_tokenids = {} # { j : { word : [token ids] } }
         encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
@@ -230,22 +268,45 @@ def get_adj_embeddings():
             for k, word_id in enumerate(word_ids): # for every token
                 if word_id is not None: 
                     curr_word = batch[j][word_id]
-                    if curr_word in batch_words[i][j]: 
-                        word_tokenids[curr_word].append(k)
-            for word in batch_words[i][j]: 
-                token_ids_word = np.array(word_tokenids[word]) 
+                    if 'mask' in exp_name: 
+                        if curr_word == '[MASK]': 
+                            word_tokenids[curr_word].append(k)
+                    else: 
+                        if curr_word in batch_words[i][j]: 
+                            word_tokenids[curr_word].append(k)
+            for tup in batch_tups[i][j]: 
+                line_num, word, ss = tup
+                if 'mask' in exp_name: 
+                    token_ids_word = np.array(word_tokenids['[MASK]']) 
+                else: 
+                    token_ids_word = np.array(word_tokenids[word]) 
                 word_embed = vector[j][token_ids_word]
                 word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
                 if np.isnan(word_embed).any(): 
                     print("PROBLEM!!!", word, batch[j])
-                    return # TODO: fix this
-                word_reps[word] += word_embed
-                word_counts[word] += 1
-    res = {}
-    for word in word_counts: 
-        res[word] = list(word_reps[word] / word_counts[word])
-    with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
-        json.dump(res, outfile)
+                    return 
+                if save_agg: 
+                    word_ss = word + '@' + ss
+                    word_reps[word_ss] += word_embed
+                    word_counts[word_ss] += 1
+                else: 
+                    word_reps[ss].append(word_embed)
+                    word_rep_keys[ss].append([line_num, word])
+    if save_agg: 
+        res = {}
+        for tup in word_counts: 
+            res[tup] = list(word_reps[tup] / word_counts[tup])
+        with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
+            json.dump(res, outfile)
+    else: 
+        out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
+        if not os.path.exists(out_folder):
+            os.makedirs(out_folder)
+        for ss in word_reps: 
+            out_array = np.array(word_reps[ss])
+            np.save(out_folder + ss + '.npy', out_array)
+        with open(out_folder + 'word_rep_key.json', 'w') as outfile: 
+            json.dump(word_rep_keys, outfile)
         
 def get_bert_mean_std(): 
     '''
@@ -344,7 +405,7 @@ def count_axes():
     with open(LOGS + 'wikipedia/axes_counts.json', 'w') as outfile: 
         json.dump(synset_counts, outfile)
 
-def sample_random_contexts(axis, adj_lines): 
+def sample_random_contexts(ss, axis, adj_lines): 
     '''
     Adj that have '-' in adj_lines are replaced
     with xqxq so in order to match them to the adj
@@ -354,7 +415,7 @@ def sample_random_contexts(axis, adj_lines):
     for adj in axis:
         a = adj.replace('-', 'xqxq') 
         for line in adj_lines[a]: 
-            axis_lines.add((adj, line))
+            axis_lines.add((ss, adj, line))
     axis_lines = random.sample(axis_lines, 100)
     return axis_lines
 
@@ -370,31 +431,32 @@ def get_axes_contexts():
     with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
         adj_lines = json.load(infile)
     
-    ret = defaultdict(list) # { line_num: [vocab words in line]}
+    ret = defaultdict(list) # {line_num: [(adj, synset)]}
     with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
         for line in infile: 
             contents = line.strip().split('\t') 
             if len(contents) < 3: continue # no antonyms
             synset = contents[0]
             axis1 = contents[1].split(',')
-            axis1_lines = sample_random_contexts(axis1, adj_lines)
+            axis1_lines = sample_random_contexts(synset + '_left', axis1, adj_lines)
             for tup in axis1_lines: 
-                ret[tup[1]].append(tup[0])
+                ret[tup[2]].append([tup[1], tup[0]])
             axis2 = contents[2].split(',')
-            axis2_lines = sample_random_contexts(axis2, adj_lines)
+            axis2_lines = sample_random_contexts(synset + '_right', axis2, adj_lines)
             for tup in axis2_lines: 
-                ret[tup[1]].append(tup[0])
+                ret[tup[2]].append([tup[1], tup[0]])
     with open(LOGS + 'wikipedia/adj_lines_random.json', 'w') as outfile: 
-        json.dump(ret, outfile)
+        json.dump(ret, outfile) 
 
 def main(): 
     #vocab = get_adj()
     #sample_wikipedia(vocab, 'adj')
     #get_axes_contexts()
     #print("----------------------")
-    #get_adj_embeddings()
+    #get_adj_embeddings('bert-default', save_agg=True)
+    get_adj_embeddings('bert-base-sub-mask', save_agg=False)
     #print("**********************")
-    get_bert_mean_std()
+    #get_bert_mean_std()
 
 if __name__ == '__main__':
     main()
