@@ -3,7 +3,7 @@ For calculating gender leaning
 """
 ROOT = '/mnt/data0/lucy/manosphere/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-LOGS = ROOT + 'logs/'
+LOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
 COREF = '/mnt/data0/dtadimeti/manosphere/logs/coref_people/'
 
 from collections import defaultdict, Counter
@@ -28,6 +28,8 @@ def main():
     fem = set(['she', 'her', 'hers', 'herself'])
     masc = set(['he', 'him', 'his', 'himself'])
     neut = set(['they', 'them', 'their', 'theirs', 'themself', 'themselves'])
+    it = set(['it', 'its', 'itself'])
+    you = set(['you', 'your', 'yours', 'yourself', 'yourselves'])
     
     print("Going over coref output...")
     error_file = open(LOGS + 'coref_errors.temp', 'w')
@@ -55,6 +57,11 @@ def main():
                             val.add('masc')
                         elif w in neut: 
                             val.add('neut')
+                        elif w in it:
+			    val.add('it')
+			elif w in you:
+			    val.add('you')
+	
                     if key is None: 
                         error_file.write("PROBLEM WITH:" + contents[i] + '\n')
                         error_file.write(month + '\t' + line + '\n')
@@ -70,6 +77,8 @@ def main():
                    'fem': [], # count
                    'masc': [], # count
                    'neut': [], # count
+		   'it': [],
+		   'you': []
                   }
     for tup in tqdm(d): 
         month, community, word = tup
@@ -80,6 +89,8 @@ def main():
         dataframe_d['fem'].append(pronoun_count['fem'])
         dataframe_d['masc'].append(pronoun_count['masc'])
         dataframe_d['neut'].append(pronoun_count['neut'])
+	dataframe_d['it'].append(pronoun_count['it'])
+	dataframe_d['you'].append(pronoun_count['you'])
         
     df = pd.DataFrame.from_dict(dataframe_d)
     
