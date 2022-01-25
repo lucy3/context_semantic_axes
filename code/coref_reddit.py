@@ -47,12 +47,11 @@ def main():
     nlp = spacy.load('en')
     neuralcoref.add_to_pipe(nlp)
 
-    # f = sys.argv[1]
-    f = 'RC_2010-04'
+    f = sys.argv[1]
     month = f.replace('RC_', '')
 
 
-    outfile = open(LOGS + 'coref_people/' + month + '_test2', 'w')
+    outfile = open(LOGS + 'coref_people2/' + month, 'w')
 
     error_outfile = open(LOGS + "reddit_errors", 'w')
 
@@ -148,6 +147,7 @@ def main():
                 outfile.write(sr.lower() + "\t" + outstring)
                 outfile.write("\n")
 
+
     outfile.close()
 
 def check_valid_comment(line):
@@ -165,8 +165,10 @@ def check_valid_comment(line):
     with open(BOTS, 'r') as infile:
         for line in infile:
             bots.append(line)
+
     author = comment['author']
     if author in bots: return False
+
     return True
 
 def check_valid_post(line):
@@ -178,6 +180,7 @@ def check_valid_post(line):
     text = post['selftext']
     if len(text) > 1000000: return False
     if text == "" or text == "[deleted]" or text == "[removed]": return False
+
     # read in bots from reddit_bots.txt, create list
     bots = []
     with open(BOTS, 'r') as infile:
@@ -185,7 +188,11 @@ def check_valid_post(line):
             bots.append(line)
     author = post['author']
     if author in bots: return False
+
     return True
+
 
 if __name__ == '__main__':
     main()
+
+
