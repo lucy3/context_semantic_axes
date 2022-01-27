@@ -125,7 +125,7 @@ def occupations():
     with open(DATA + 'semantics/cleaned/occupations.json', 'w') as outfile:
         json.dump(classes, outfile)
         
-def get_occupation_pages(): 
+def get_occupation_pages_part1(): 
     '''
     For each occupation, get its wikipedia page and download wikitext
     Some occupations do not have a wikipedia page, in which
@@ -153,10 +153,21 @@ def get_occupation_pages():
     with open(DATA + 'semantics/occupation_wikipages.json', 'w') as outfile: 
         json.dump(wiki_pages, outfile)         
     
+def get_occupation_pages_part2(): 
+    '''
+    Use the page IDs from occupation_wikipages.json, 
+    grep for the file containing the cleaned wikitext, 
+    and then extracts the cleaned wikitext to a separate file. 
+    '''
+    with open(DATA + 'semantics/occupation_wikipages.json', 'r') as infile: 
+        occ_pages = json.load(infile)
+    for occ in occ_pages: 
+        
+    
 def prep_datasets():
     #nrc_vad()
     #occupations()
-    get_occupation_pages()
+    get_occupation_pages_part1()
     
 def get_semaxes(): 
     '''
@@ -301,10 +312,26 @@ def get_poles(vec_dict, axes):
         adj_poles[pole] = (left_vec, right_vec)
     return adj_poles
 
-def get_glove_vecs(vocab, axes_vocab): 
+def get_mean_std_glove(): 
+    all_vecs = []
+    with open(GLOVE + 'glove.6B.300d.txt', 'r') as infile:
+        for line in infile: 
+            contents = line.split()
+            word = contents[0]
+            vec = np.array([float(i) for i in contents[1:]])
+            all_vecs.append(vec)
+    glove_mean = np.mean(all_vecs, axis=0)
+    np.save(GLOVE + 'mean.npy', glove_mean)
+    glove_std = np.std(all_vecs, axis=0)
+    np.save(GLOVE + 'std.npy', glove_std)
+
+def get_glove_vecs(vocab, axes_vocab, exp_name): 
     '''
     - get glove representations of a vocab, e.g. occupations
     '''
+    if 'zscore' in exp_name: 
+        glove_mean = np.load(GLOVE + 'mean.npy')
+        glove_std = np.load(GLOVE + 'std.npy')
     bigram_tokens = set()
     for w in vocab: 
         tokens = w.split()
@@ -317,6 +344,8 @@ def get_glove_vecs(vocab, axes_vocab):
             word = contents[0]
             if word in vocab or word in axes_vocab or word in bigram_tokens: 
                 vec = np.array([float(i) for i in contents[1:]])
+                if 'zscore' in exp_name: 
+                    vec = (vec - glove_mean) / glove_std
                 glove_vecs[word] = vec
     # average representations for bigrams
     for w in vocab: 
@@ -548,6 +577,10 @@ def loo_val(vec_dict, axes, exp_name):
             loo(pole, left_vec, right_vec, right_vocab, left_vocab, outfile, exp_name)
 
 def get_bert_vecs(exp_name='bert-default'): 
+    '''
+    This returns default BERT vectors created from random contexts, 
+    and zscores them if zscore is in the exp_name. 
+    '''
     with open(LOGS + 'semantics_val/adj_BERT.json', 'r') as infile: 
         bert_vecs = json.load(infile) # { adj@ss : [vector] } 
     if 'zscore' in exp_name: 
@@ -560,7 +593,7 @@ def get_bert_vecs(exp_name='bert-default'):
             bert_vecs[vec] = np.array(bert_vecs[vec])
     return bert_vecs
 
-def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name, singleton_subs): 
+def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name, singleton_subs=None): 
     '''
     Gets vectors for one side of a synset. 
     @outputs
@@ -588,8 +621,9 @@ def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_na
             line_num = rk[0]
             w = rk[1]
             rep_keys_map[w].append(i)
-            for s in singleton_subs[pole + '_' + line_num + '_' + w]: 
-                sub_map[s].append(i)
+            if singleton_subs: 
+                for s in singleton_subs[pole + '_' + line_num + '_' + w]: 
+                    sub_map[s].append(i)
         side_vec = np.load(in_folder + side_pole + '.npy')
         if 'zscore' in exp_name: 
             bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
@@ -611,12 +645,12 @@ def loo_val_subs(vec_dict, in_folder, axes, exp_name):
             left = axes[pole][0] # list of words
             left_pole = pole + '_left'
             left_vec, lrep_keys_map, lsub_map = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
-                                                               word_rep_keys, exp_name, singleton_subs)
+                                                               word_rep_keys, exp_name, singleton_subs=singleton_subs)
             
             right = axes[pole][1]
             right_pole = pole + '_right'
             right_vec, rrep_keys_map, rsub_map = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
-                                                               word_rep_keys, exp_name, singleton_subs)
+                                                               word_rep_keys, exp_name, singleton_subs=singleton_subs)
             
             for w in lrep_keys_map: 
                 idx = lrep_keys_map[w]
@@ -641,29 +675,77 @@ def loo_val_subs(vec_dict, in_folder, axes, exp_name):
                 arr = right_vec[idx,:].mean(axis=0)
                 sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
                 outfile.write(pole + '\t' + w + '\t' + str(sim) + '\tright\n')
+                
+def loo_val_probs(vec_dict, in_folder, axes, exp_name): 
+    with open(in_folder + 'word_rep_key.json', 'r') as infile: 
+        word_rep_keys = json.load(infile)
+    with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
+        for pole in tqdm(sorted(axes.keys())): 
+            left = axes[pole][0] # list of words
+            left_pole = pole + '_left'
+            left_vec, lrep_keys_map, _ = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
+                                                               word_rep_keys, exp_name)
+            
+            right = axes[pole][1]
+            right_pole = pole + '_right'
+            right_vec, rrep_keys_map, _ = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
+                                                               word_rep_keys, exp_name)
+            
+            for w in lrep_keys_map: 
+                idx = lrep_keys_map[w]
+                mask = np.ones(left_vec.shape[0], dtype=bool)
+                mask[idx] = False # mask out vectors corresponding to word
+                new_left = left_vec[mask,:]
+                if new_left.shape[0] == 0: continue
+                arr = left_vec[idx,:].mean(axis=0) 
+                sim = loo_val_helper(arr, new_left, right_vec, exp_name=exp_name)
+                outfile.write(pole + '\t' + w + '\t' + str(sim) + '\tleft\n')
+                
+            for w in rrep_keys_map: 
+                idx = rrep_keys_map[w]
+                mask = np.ones(right_vec.shape[0], dtype=bool)
+                mask[idx] = False
+                new_right = right_vec[mask,:]
+                if new_right.shape[0] == 0: continue
+                arr = right_vec[idx,:].mean(axis=0)
+                sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
+                outfile.write(pole + '\t' + w + '\t' + str(sim) + '\tright\n')
 
 def inspect_axes(exp_name): 
     axes, axes_vocab = load_wordnet_axes()
     vocab = set()
-    if exp_name in ['default', 'kbest', 'scaler', 'pca']: 
-        vec_dict = get_glove_vecs(vocab, axes_vocab)
+    if exp_name in ['default', 'glove-zscore']: 
+        vec_dict = get_glove_vecs(vocab, axes_vocab, exp_name)
         loo_val_static(vec_dict, axes, exp_name)
-    elif exp_name in ['bert-default', 'bert-zscore']: 
+        return
+    if 'bert' in exp_name: 
         vec_dict = get_bert_vecs(exp_name)
+    if exp_name in ['bert-default', 'bert-zscore']: 
         loo_val(vec_dict, axes, exp_name)
     elif 'sub' in exp_name and 'bert' in exp_name: 
-        vec_dict = get_bert_vecs(exp_name)
-        in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
+        if exp_name.startswith('bert-base-sub') and 'mask' not in exp_name: 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub/'
+        elif exp_name.startswith('bert-base-sub') and 'mask' in exp_name: 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub-mask/'
+        else: 
+            in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
         loo_val_subs(vec_dict, in_folder, axes, exp_name)
+    elif 'prob' in exp_name and 'bert' in exp_name: 
+        if exp_name.startswith('bert-base-prob'): 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
+        loo_val_probs(vec_dict, in_folder, axes, exp_name)
     
 def main(): 
 #     prep_datasets()
 #     retrieve_wordnet_axes()
     #inspect_axes('default')
+    inspect_axes('glove-zscore')
     #inspect_axes('bert-default')
     #inspect_axes('bert-zscore')
     #inspect_axes('bert-base-sub')
-    inspect_axes('bert-base-sub-mask')
+    #inspect_axes('bert-base-sub-zscore')
+    #inspect_axes('bert-base-prob')
+    #inspect_axes('bert-base-prob-zscore')
 #     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')

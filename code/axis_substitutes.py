@@ -225,6 +225,7 @@ def find_good_contexts_probs(model_name):
     in wikipedia_embeddings.py. {line_num: [(adj, synset)]}
     '''
     synonyms, antonyms = get_syn_ant()
+    tokenizer = get_tokenizer(model_name)
     
     syn_scores = defaultdict(dict) # { synset_side : { line_ID_adj: [scores] } }
     syn_subs = defaultdict(dict) # { synset_side : { line_ID_adj: [subs] } } where subs in same order as scores
@@ -239,11 +240,15 @@ def find_good_contexts_probs(model_name):
             contents = line.strip().split(' ')
             line_num = contents[1]
             adj = contents[2] 
+            adj_id = str(tokenizer.convert_tokens_to_ids([adj])[0])
             subs = []
             scores = []
             if len(contents) > 3: 
                 for i in range(3, len(contents)): 
                     item = contents[i].split('_')
+                    # leave out correct substitute
+                    if item[0] == adj_id: 
+                        continue
                     scores.append(float(item[1]))
                     subs.append(item[0])
             synset_a_s = contents[0].split('_')
@@ -252,44 +257,57 @@ def find_good_contexts_probs(model_name):
                 synset_side = synset + '_left'
             if synset + '_right' in synonyms[adj]: 
                 synset_side = synset + '_right'
-            if synset_side[1] == 'syn': 
+            if synset_a_s[1] == 'syn': 
                 syn_scores[synset_side][line_num + '_' + adj] = scores
                 syn_subs[synset_side][line_num + '_' + adj] = subs
-            if synset_side[1] == 'ant': 
+            if synset_a_s[1] == 'ant': 
                 ant_scores[synset_side][line_num + '_' + adj] = scores
                 ant_subs[synset_side][line_num + '_' + adj] = subs
     
     c = 0
+    adj_lines = defaultdict(list)
     for synset_side in tqdm(syn_scores): 
-        if not synset.startswith('strong.a.01') and not synset.startswith('violent.a.01'): 
-            continue
-        print(synset)
         syn_avg_scores = Counter()
         for line_num_adj in syn_scores[synset_side]: 
             scores = syn_scores[synset_side][line_num_adj]
+            if len(scores) == 0: 
+                # later will backoff onto BERT default
+                continue
             syn_avg_scores[line_num_adj] = sum(scores) / len(scores)
         top_200 = syn_avg_scores.most_common(200)
         syn_ant_diff = Counter()
         for tup in top_200: 
             line_num_adj, score = tup
             scores = ant_scores[synset_side][line_num_adj]
-            diff = syn_avg_scores[line_num_adj] - sum(scores) / len(scores)
+            if len(scores) == 0: 
+                diff = syn_avg_scores[line_num_adj]
+            else: 
+                diff = syn_avg_scores[line_num_adj] - sum(scores) / len(scores)
             syn_ant_diff[line_num_adj] = diff
         top_100 = syn_ant_diff.most_common(100)
         for tup in top_100: 
-            print(tup)
-        print()
+            line_adj = tup[0].split('_')
+            line_ID = line_adj[0]
+            adj = line_adj[1]
+            adj_lines[line_ID].append([adj, synset_side])
+            
+    print("ADJ LINES LENGTH:", len(adj_lines))
+            
+    if model_name == 'bert-base-uncased': 
+        outfile_name = 'adj_lines_base-probs.json'
+    elif model_name == 'bert-large-uncased': 
+        outfile_name = 'adj_lines_large-probs.json'
         
-        c += 1
-        if c > 10: break
+    with open(LOGS + 'wikipedia/' + outfile_name, 'w') as outfile: 
+        json.dump(adj_lines, outfile)
         
-        # for every adj in synset on either side
-            # if adj in syn or ant score calculation, subtract its score from total
-            # do not look at contexts where this adj is masked out word
-            # get the top 200 contexts by syn scores
-            # get the top 100 contexts where syn-ant is maximized 
-            # keep track of contexts associated with this loov: synset + '_' + line_ID + '_' + adj 
-            # add sentence to total set of sentences to run model on
+    # for every adj in synset on either side
+        # if adj in syn or ant score calculation, subtract its score from total
+        # do not look at contexts where this adj is masked out word
+        # get the top 200 contexts by syn scores
+        # get the top 100 contexts where syn-ant is maximized 
+        # keep track of contexts associated with this loov: synset + '_' + line_ID + '_' + adj 
+        # add sentence to total set of sentences to run model on
     
 def find_good_contexts_subs(model_name):
     """
@@ -408,12 +426,10 @@ def inspect_contexts(model_name):
 def main(): 
     #predict_substitutes('bert-base-uncased')
     #predict_substitutes('bert-large-uncased')
-    #predict_substitute_probs('bert-base-uncased')
-    # TODO: roberta is broken currently due to tokenization issues
-    #predict_substitutes('roberta-base')
+    predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    find_good_contexts_probs('bert-base-uncased')
+    #find_good_contexts_probs('bert-base-uncased')
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
 

@@ -43,8 +43,6 @@ def get_occupation_embeddings():
     For each stretch of wikitext, get BERT embeddings
     of occupation words
     '''
-    with open(DATA + 'semantics/occupation_wikipages.json', 'r') as infile: 
-        occ_pages = json.load(infile)
     # read in wikitext json
     # for each word
     # keep only bigrams and unigrams
@@ -231,6 +229,8 @@ def get_adj_embeddings(exp_name, save_agg=True):
     '''
     if exp_name.startswith('bert-base-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_base-substitutes.json'
+    elif exp_name.startswith('bert-base-prob'): 
+        input_json = LOGS + 'wikipedia/adj_lines_base-probs.json'
     elif exp_name.startswith('bert-large-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_large-substitutes.json'
     elif exp_name == 'bert-default': 
@@ -454,7 +454,8 @@ def main():
     #get_axes_contexts()
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=True)
-    get_adj_embeddings('bert-base-sub-mask', save_agg=False)
+    #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
+    get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
 
