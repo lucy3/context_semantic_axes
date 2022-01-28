@@ -300,14 +300,6 @@ def find_good_contexts_probs(model_name):
         
     with open(LOGS + 'wikipedia/' + outfile_name, 'w') as outfile: 
         json.dump(adj_lines, outfile)
-        
-    # for every adj in synset on either side
-        # if adj in syn or ant score calculation, subtract its score from total
-        # do not look at contexts where this adj is masked out word
-        # get the top 200 contexts by syn scores
-        # get the top 100 contexts where syn-ant is maximized 
-        # keep track of contexts associated with this loov: synset + '_' + line_ID + '_' + adj 
-        # add sentence to total set of sentences to run model on
     
 def find_good_contexts_subs(model_name):
     """

@@ -162,12 +162,14 @@ def get_occupation_pages_part2():
     with open(DATA + 'semantics/occupation_wikipages.json', 'r') as infile: 
         occ_pages = json.load(infile)
     for occ in occ_pages: 
-        
+        # TODO: 
+        pass
     
 def prep_datasets():
     #nrc_vad()
     #occupations()
-    get_occupation_pages_part1()
+    #get_occupation_pages_part1()
+    get_occupation_pages_part2()
     
 def get_semaxes(): 
     '''
@@ -354,7 +356,10 @@ def get_glove_vecs(vocab, axes_vocab, exp_name):
             rep = []
             for tok in tokens: 
                 if tok in glove_vecs: 
-                    rep.append(glove_vecs[tok])
+                    vec = glove_vecs[tok]
+                    if 'zscore' in exp_name: 
+                        vec = (vec - glove_mean) / glove_std
+                    rep.append(vec)
             if len(rep) != 2: continue
             rep = np.mean(np.array(rep), axis=0)
             glove_vecs[w] = rep
@@ -477,27 +482,6 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
             json.dump(biases, outfile)
         
 def loo_val_helper(arr, left_vec, right_vec, exp_name):
-    if exp_name == 'pca': 
-        this_adj_matrix = np.concatenate((left_vec, right_vec), axis=0)
-        scaler = StandardScaler()
-        this_adj_matrix = scaler.fit_transform(this_adj_matrix)
-        pca = PCA(n_components=5)
-        this_adj_matrix = pca.fit_transform(this_adj_matrix)
-        left_vec = this_adj_matrix[:left_vec.shape[0], :]
-        right_vec = this_adj_matrix[left_vec.shape[0]:, :]
-        arr = scaler.transform(arr.reshape(1, -1))
-        arr = pca.transform(arr)
-    if exp_name == 'scaler': 
-        # TODO
-        pass
-    if exp_name == 'kbest': 
-        this_adj_matrix = np.concatenate((left_vec, right_vec), axis=0)
-        this_adj_scores = [1] * left_vec.shape[0] + [0] * right_vec.shape[0]
-        selector = SelectKBest(f_classif, k=100)
-        this_adj_matrix = selector.fit_transform(this_adj_matrix, this_adj_scores)
-        left_vec = this_adj_matrix[:left_vec.shape[0], :]
-        right_vec = this_adj_matrix[left_vec.shape[0]:, :]
-        arr = selector.transform(arr.reshape(1, -1))
     left_pole = left_vec.mean(axis=0)
     right_pole = right_vec.mean(axis=0)
     microframe = right_pole - left_pole
@@ -593,16 +577,14 @@ def get_bert_vecs(exp_name='bert-default'):
             bert_vecs[vec] = np.array(bert_vecs[vec])
     return bert_vecs
 
-def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name, singleton_subs=None): 
+def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name): 
     '''
     Gets vectors for one side of a synset. 
     @outputs
     side_vec: np.ma.array where each row is a vector
     rep_keys_map: { word : [indices that make up the word's agg vector] } 
-    sub_map: { word : [additional indices to leave out] }
     '''
     pole = side_pole.split('_')[0]
-    sub_map = defaultdict(list) 
     if side_pole not in word_rep_keys: 
         # fall back on bert random
         side_vec = [] # list of vectors 
@@ -614,81 +596,34 @@ def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_na
                 side_vec.append(vec_dict[ss_adj])
                 rep_keys_map[w].append(i)
                 i += 1      
-    else: 
+    else:  
         rep_keys = word_rep_keys[side_pole] # [[line_num, word]]
         rep_keys_map = defaultdict(list) 
         for i, rk in enumerate(rep_keys): 
             line_num = rk[0]
             w = rk[1]
             rep_keys_map[w].append(i)
-            if singleton_subs: 
-                for s in singleton_subs[pole + '_' + line_num + '_' + w]: 
-                    sub_map[s].append(i)
         side_vec = np.load(in_folder + side_pole + '.npy')
         if 'zscore' in exp_name: 
             bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
             bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
             side_vec = (side_vec - bert_mean) / bert_std
     side_vec = np.ma.array(side_vec, mask=False)
-    return side_vec, rep_keys_map, sub_map
+    return side_vec, rep_keys_map
 
-def loo_val_subs(vec_dict, in_folder, axes, exp_name): 
-    if exp_name.startswith('bert-base-sub'): 
-        subfile_name = 'sub_lines_base-substitutes.json'
-    with open(LOGS + 'wikipedia/' + subfile_name, 'r') as infile:
-        # cases where a substitute is deciding factor in overlap
-        singleton_subs = defaultdict(list, json.load(infile)) # {pole + '_' + substitute : [[line_ID, adj]]}
+def loo_val_nonagg(vec_dict, in_folder, axes, exp_name): 
     with open(in_folder + 'word_rep_key.json', 'r') as infile: 
         word_rep_keys = json.load(infile)
     with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
         for pole in tqdm(sorted(axes.keys())): 
             left = axes[pole][0] # list of words
             left_pole = pole + '_left'
-            left_vec, lrep_keys_map, lsub_map = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
-                                                               word_rep_keys, exp_name, singleton_subs=singleton_subs)
-            
-            right = axes[pole][1]
-            right_pole = pole + '_right'
-            right_vec, rrep_keys_map, rsub_map = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
-                                                               word_rep_keys, exp_name, singleton_subs=singleton_subs)
-            
-            for w in lrep_keys_map: 
-                idx = lrep_keys_map[w]
-                idx_sub = lsub_map[w]
-                mask = np.ones(left_vec.shape[0], dtype=bool)
-                mask[idx] = False # mask out vectors corresponding to word
-                mask[idx_sub] = False # mask out vectors from contexts where word is sole substitute
-                new_left = left_vec[mask,:]
-                if new_left.shape[0] == 0: continue
-                arr = left_vec[idx,:].mean(axis=0) 
-                sim = loo_val_helper(arr, new_left, right_vec, exp_name=exp_name)
-                outfile.write(pole + '\t' + w + '\t' + str(sim) + '\tleft\n')
-                
-            for w in rrep_keys_map: 
-                idx = rrep_keys_map[w]
-                idx_sub = rsub_map[w]
-                mask = np.ones(right_vec.shape[0], dtype=bool)
-                mask[idx] = False
-                mask[idx_sub] = False
-                new_right = right_vec[mask,:]
-                if new_right.shape[0] == 0: continue
-                arr = right_vec[idx,:].mean(axis=0)
-                sim = loo_val_helper(arr, left_vec, new_right, exp_name=exp_name)
-                outfile.write(pole + '\t' + w + '\t' + str(sim) + '\tright\n')
-                
-def loo_val_probs(vec_dict, in_folder, axes, exp_name): 
-    with open(in_folder + 'word_rep_key.json', 'r') as infile: 
-        word_rep_keys = json.load(infile)
-    with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
-        for pole in tqdm(sorted(axes.keys())): 
-            left = axes[pole][0] # list of words
-            left_pole = pole + '_left'
-            left_vec, lrep_keys_map, _ = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
+            left_vec, lrep_keys_map = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
                                                                word_rep_keys, exp_name)
             
             right = axes[pole][1]
             right_pole = pole + '_right'
-            right_vec, rrep_keys_map, _ = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
+            right_vec, rrep_keys_map = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
                                                                word_rep_keys, exp_name)
             
             for w in lrep_keys_map: 
@@ -729,11 +664,11 @@ def inspect_axes(exp_name):
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub-mask/'
         else: 
             in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
-        loo_val_subs(vec_dict, in_folder, axes, exp_name)
+        loo_val_nonagg(vec_dict, in_folder, axes, exp_name)
     elif 'prob' in exp_name and 'bert' in exp_name: 
         if exp_name.startswith('bert-base-prob'): 
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
-        loo_val_probs(vec_dict, in_folder, axes, exp_name)
+        loo_val_nonagg(vec_dict, in_folder, axes, exp_name)
     
 def main(): 
 #     prep_datasets()
@@ -742,6 +677,7 @@ def main():
     inspect_axes('glove-zscore')
     #inspect_axes('bert-default')
     #inspect_axes('bert-zscore')
+    #inspect_axes('bert-base-sub-mask')
     #inspect_axes('bert-base-sub')
     #inspect_axes('bert-base-sub-zscore')
     #inspect_axes('bert-base-prob')
@@ -753,7 +689,6 @@ def main():
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='pca')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='scaler')
 #     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='scaler')
-    #prep_datasets()
 
 if __name__ == '__main__':
     main()
