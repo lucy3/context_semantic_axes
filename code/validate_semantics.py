@@ -16,6 +16,10 @@ import math
 from sklearn.feature_selection import SelectKBest, f_classif, SelectPercentile
 import requests
 from tqdm import tqdm
+from bs4 import BeautifulSoup
+import os
+import re
+from nltk import tokenize
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -59,64 +63,28 @@ def nrc_vad():
         
 def occupations(): 
     '''
-    Occupations from labour bureau and wikipedia
-    TODO: rewrite
+    Occupations from wikipedia
     '''
-    data_file = DATA + 'semantics/job_demographics.csv'
-    classes = {'stem' : {'high': [], 'low': []},
-               'art' : {'high': [], 'low': []},
-               'health' : {'high': [], 'low': []}, 
+    classes = {'stem_health_vs_art' : {'high': [], 'low': []},
                 }
-    stem = False
-    art = False
-    health = False
-    with open(data_file, 'r', encoding='utf-8-sig') as infile: 
-        reader = csv.DictReader(infile)
-        for row in reader:
-            job = row['job'].lower().strip()
-            if job == '': continue
-            if job == 'professional and related occupations': 
-                stem = True
-            elif job == 'community and social service occupations': 
-                stem = False
-            elif job == 'arts, design, entertainment, sports, and media occupations': 
-                art = True
-            elif job == 'healthcare practitioners and technical occupations': 
-                art = False
-                health = True
-            elif job == 'protective service occupations': 
-                health = False
-            if len(job.split()) < 3: 
-                if stem: 
-                    classes['stem']['high'].append(job)
-                else: 
-                    classes['stem']['low'].append(job)
-                if art: 
-                    classes['art']['high'].append(job)
-                else: 
-                    classes['art']['low'].append(job)
-                if health: 
-                    classes['health']['high'].append(job)
-                else: 
-                    classes['health']['low'].append(job)
-    
-    for clss in classes: 
+    for clss in ['stem', 'art', 'health']: 
         with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
             for line in infile: 
-                if line.startswith('#'): continue
-                job = line.strip().lower()
-                if len(job.split()) >= 3: continue
-                for other_clss in classes: 
-                    if clss == other_clss: 
-                        classes[other_clss]['high'].append(job)
+                if line.startswith('#http'): continue
+                if line.startswith('#'): 
+                    curr_cat = line.strip()
+                else: 
+                    occ = line.strip().lower()
+                    if len(occ.split()) >= 3: continue
+                    if clss == 'stem' or clss = 'health': 
+                        classes['stem_health_vs_art']['high'].append(occ)
                     else: 
-                        classes[other_clss]['low'].append(job)
-                        
+                        classes['stem_health_vs_art']['low'].append(occ)
+                
     for clss in classes: 
         # remove duplicates
         classes[clss]['high'] = list(set(classes[clss]['high']))
         classes[clss]['low'] = list(set(classes[clss]['low']))
-    
     print(classes['stem']['high'])
     print()
     print(classes['art']['high'])
@@ -131,6 +99,12 @@ def get_occupation_pages_part1():
     Some occupations do not have a wikipedia page, in which
     case we leave them out. 
     '''
+    glove_vocab = set()
+    with open(GLOVE + 'glove.6B.300d.txt', 'r') as infile:
+        for line in infile: 
+            contents = line.split()
+            glove_vocab.add(contents[0])
+            
     classes = ['stem', 'art', 'health']
     wiki_pages = {} # title : request response
     for clss in classes: 
@@ -141,6 +115,13 @@ def get_occupation_pages_part1():
                     curr_cat = line.strip()
                 else: 
                     wiki_title = line.strip().lower()
+                    toks = set(wiki_title.lower().split(' '))
+                    if len(toks) > 2: 
+                        # only unigrams and bigrams
+                        continue
+                    if toks & glove_vocab != toks: 
+                        # tokens need to be in glove
+                        continue
                     response = requests.get('https://en.wikipedia.org/w/api.php?action=parse&page=' + wiki_title + '&prop=wikitext&formatversion=2&format=json&redirects')
                     if not response.ok: 
                         print("Problem with", wiki_title)
@@ -148,8 +129,9 @@ def get_occupation_pages_part1():
                     if 'error' in response_dict: 
                         print("Problem with", wiki_title, response_dict)
                     else: 
-                        wikitext = response_dict['parse']['wikitext']
-                        wiki_pages[wiki_title] = wikitext
+                        title = response_dict['parse']['title']
+                        pageid = response_dict['parse']['pageid']
+                        wiki_pages[wiki_title] = [title, pageid]
     with open(DATA + 'semantics/occupation_wikipages.json', 'w') as outfile: 
         json.dump(wiki_pages, outfile)         
     
@@ -159,17 +141,45 @@ def get_occupation_pages_part2():
     grep for the file containing the cleaned wikitext, 
     and then extracts the cleaned wikitext to a separate file. 
     '''
+            
+    WIKI_TEXT = '/mnt/data0/corpora/wikipedia/text/'
+    
     with open(DATA + 'semantics/occupation_wikipages.json', 'r') as infile: 
         occ_pages = json.load(infile)
+    pages_occ = {}
     for occ in occ_pages: 
-        # TODO: 
-        pass
+        pages_occ[str(occ_pages[occ][1])] = occ
+        
+    occ_sents = defaultdict(list)
+            
+    for folder in tqdm(os.listdir(WIKI_TEXT)): 
+        if folder == 'all_files.txt': continue
+        for f in os.listdir(WIKI_TEXT + folder): 
+            path = WIKI_TEXT + folder + '/' + f
+            with open(path, 'r') as infile: 
+                soup = BeautifulSoup(infile.read(), features="lxml")
+                docs = soup.find_all('doc')
+                for doc in docs: 
+                    idx = doc.get('id')
+                    if idx in pages_occ: 
+                        # found an occupation page
+                        occ = pages_occ[idx]
+                        text = doc.get_text()
+                        sents = tokenize.sent_tokenize(text)
+                        for sent in sents: 
+                            sent_lower = sent.lower()
+                            matches = re.search(r'\b' + occ + r'\b', sent)
+                            if matches is not None: 
+                                occ_sents[occ].append(sent)
+    
+    with open(DATA + 'semantics/occupation_sents.json', 'w') as outfile: 
+        json.dump(occ_sents, outfile)
     
 def prep_datasets():
     #nrc_vad()
-    #occupations()
+    occupations()
     #get_occupation_pages_part1()
-    get_occupation_pages_part2()
+    #get_occupation_pages_part2()
     
 def get_semaxes(): 
     '''
@@ -365,7 +375,7 @@ def get_glove_vecs(vocab, axes_vocab, exp_name):
             glove_vecs[w] = rep
     return glove_vecs
 
-def save_inputs_from_json(file_path, lexicon_name): 
+def save_frameaxis_inputs(file_path, lexicon_name, exp_name): 
     '''
     For a lexicon that has scores for different words,
     saves vectors associated with that lexicon.
@@ -378,7 +388,7 @@ def save_inputs_from_json(file_path, lexicon_name):
             vocab.update(lexicon_dict[c][score])
     
     axes, axes_vocab = load_wordnet_axes()
-    glove_vecs = get_glove_vecs(vocab, axes_vocab)
+    glove_vecs = get_glove_vecs(vocab, axes_vocab, exp_name)
     get_pole_matrix(glove_vecs, axes)
     
     for c in lexicon_dict.keys(): 
@@ -423,7 +433,7 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
         for score in lexicon_dict[c]: 
             vocab.update(lexicon_dict[c][score])
     axes, axes_vocab = load_wordnet_axes()
-    glove_vecs = get_glove_vecs(vocab, axes_vocab)
+    glove_vecs = get_glove_vecs(vocab, axes_vocab, exp_name)
     adj_poles = get_poles(glove_vecs, axes)
     _, score_matrices, word_matrices = load_inputs(file_path, lexicon_name)
     
@@ -437,14 +447,6 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
             left_vecs, right_vecs = adj_poles[pole]
             this_adj_matrix = np.concatenate((left_vecs, right_vecs), axis=0)
             this_word_matrix = word_matrix
-            if exp_name == 'pca' or exp_name == 'scaler': 
-                scaler = StandardScaler()
-                this_adj_matrix = scaler.fit_transform(this_adj_matrix)
-                this_word_matrix = scaler.transform(this_word_matrix)
-            if exp_name == 'pca': 
-                pca = PCA(n_components=5)
-                this_adj_matrix = pca.fit_transform(this_adj_matrix)
-                this_word_matrix = pca.transform(this_word_matrix)
             left_vecs = this_adj_matrix[:left_vecs.shape[0], :]
             right_vecs = this_adj_matrix[left_vecs.shape[0]:, :]
                 
@@ -454,7 +456,7 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
             c_w_f2 = c_w_f[score_matrix == 1]
             b_t_f1 = np.mean(c_w_f1) # bias 
             b_t_f2 = np.mean(c_w_f2) # bias
-            bias_sep = abs(b_t_f1 - b_t_f2)
+            bias_sep = abs(b_t_f2 - b_t_f1)
 
             if calc_effect: 
                 samples = []
@@ -474,12 +476,8 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
                 effect = 0
             biases[c][pole] = (bias_sep, effect, b_t_f1, b_t_f2)
                 
-    if exp_name == '': 
-        with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis.json', 'w') as outfile:
-            json.dump(biases, outfile)
-    else: 
-        with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis_' + exp_name + '.json', 'w') as outfile:
-            json.dump(biases, outfile)
+    with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis_' + exp_name + '.json', 'w') as outfile:
+        json.dump(biases, outfile)
         
 def loo_val_helper(arr, left_vec, right_vec, exp_name):
     left_pole = left_vec.mean(axis=0)
@@ -674,7 +672,7 @@ def main():
 #     prep_datasets()
 #     retrieve_wordnet_axes()
     #inspect_axes('default')
-    inspect_axes('glove-zscore')
+    #inspect_axes('glove-zscore')
     #inspect_axes('bert-default')
     #inspect_axes('bert-zscore')
     #inspect_axes('bert-base-sub-mask')
@@ -682,13 +680,8 @@ def main():
     #inspect_axes('bert-base-sub-zscore')
     #inspect_axes('bert-base-prob')
     #inspect_axes('bert-base-prob-zscore')
-#     save_inputs_from_json(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-#     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations')
-#     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad')
-#     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='pca')
-#     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='pca')
-#     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='scaler')
-#     frameaxis_glove(DATA + 'semantics/cleaned/nrc_vad.json', 'vad', exp_name='scaler')
+#     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='default')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='default')
 
 if __name__ == '__main__':
     main()

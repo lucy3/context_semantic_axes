@@ -43,11 +43,77 @@ def get_occupation_embeddings():
     For each stretch of wikitext, get BERT embeddings
     of occupation words
     '''
-    # read in wikitext json
-    # for each word
-    # keep only bigrams and unigrams
-    # batch data 
-    # get average embedding
+    with open(DATA + 'semantics/occupation_sents.json', 'r') as infile: 
+        occ_sents = json.load(infile) 
+        
+    print("Batching data...")
+    batch_size = 8
+    batch_sentences = [] # each item is a list
+    batch_words = [] # each item is a list
+    curr_batch = []
+    curr_words = []
+    btokenizer = BasicTokenizer(do_lower_case=True)
+    for occ in occ_sents: 
+        for text in occ_sents[occ]: 
+            tokens = btokenizer.tokenize(text)
+            curr_batch.append(tokens)
+            # take care of bigrams 
+            curr_word_tokens = btokenizer.tokenize(occ)
+            curr_words.append(curr_word_tokens)
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                batch_words.append(curr_words)
+                curr_batch = []
+                curr_words = []
+    if len(curr_batch) != 0: # fence post
+        batch_sentences.append(curr_batch)
+        batch_words.append(curr_words)
+
+    print("Getting model...")
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.to(device)
+    model.eval()
+    
+    word_reps = {}
+    for occ in occ_sents: 
+        occ = ' '.join(btokenizer.tokenize(occ))
+        word_reps[occ] = np.zeros(3072)
+    word_counts = Counter()
+    
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        word_tokenids = {} # { j : { word : [token ids] } }
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = []
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word in batch_words[i][j]: 
+                        word_tokenids.append(k)
+            token_ids_word = np.array(word_tokenids) 
+            word_embed = vector[j][token_ids_word]
+            word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
+            if np.isnan(word_embed).any(): 
+                print("PROBLEM!!!", word, batch[j])
+                return 
+            occ = ' '.join(batch_words[i][j])
+            word_reps[occ] += word_embed
+            word_counts[occ] += 1
+    
+    res = {}
+    for w in word_counts: 
+        res[w] = list(word_reps[w] / word_counts[w])
+    with open(LOGS + 'semantics_val/occupation_BERT.json', 'w') as outfile: 
+        json.dump(res, outfile)
 
 def contains_vocab(tup, tokenizer=None, vocab=set()): 
     '''
@@ -449,13 +515,14 @@ def get_axes_contexts():
         json.dump(ret, outfile) 
 
 def main(): 
+    get_occupation_embeddings()
     #vocab = get_adj()
     #sample_wikipedia(vocab, 'adj')
     #get_axes_contexts()
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=True)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
-    get_adj_embeddings('bert-base-prob', save_agg=False)
+    #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
 
