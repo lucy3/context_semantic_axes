@@ -63,33 +63,44 @@ def nrc_vad():
         
 def occupations(): 
     '''
-    Occupations from wikipedia
+    Occupations from wikipedia and labour bureau 
     '''
-    classes = {'stem_health_vs_art' : {'high': [], 'low': []},
-                }
-    for clss in ['stem', 'art', 'health']: 
+    classes = defaultdict(dict)
+    categories = ['art', 'health', 'other', 'sports', 'stem']
+    
+    curr_cat = None
+    for clss in categories: 
         with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
             for line in infile: 
-                if line.startswith('#http'): continue
+                if line.startswith('#http') or line.startswith('#Note:'): continue
                 if line.startswith('#'): 
-                    curr_cat = line.strip()
-                else: 
-                    occ = line.strip().lower()
-                    if len(occ.split()) >= 3: continue
-                    if clss == 'stem' or clss = 'health': 
-                        classes['stem_health_vs_art']['high'].append(occ)
+                    curr_cat = line.strip().replace('#', '')
+                    classes[curr_cat]['high'] = []
+                    classes[curr_cat]['low'] = []
+    for clss in categories: 
+        with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
+            for line in infile: 
+                if line.startswith('#http') or line.startswith('#Note:'): continue
+                if line.startswith('#'): 
+                    curr_cat = line.strip().replace('#', '')
+                    continue
+                job = line.strip()
+                clean_job = re.sub("[\(].*?[\)]", "", job)
+                if len(clean_job.split()) >= 3: continue
+                for clss in classes: 
+                    if clss == curr_cat: 
+                        classes[clss]['high'].append(job)
                     else: 
-                        classes['stem_health_vs_art']['low'].append(occ)
-                
+                        classes[clss]['low'].append(job)
+                        
     for clss in classes: 
         # remove duplicates
         classes[clss]['high'] = list(set(classes[clss]['high']))
+        print(clss.upper())
+        print(classes[clss]['high'])
         classes[clss]['low'] = list(set(classes[clss]['low']))
-    print(classes['stem']['high'])
-    print()
-    print(classes['art']['high'])
-    print()
-    print(classes['health']['high'])
+    
+    # This version keeps wikipedia job formatting
     with open(DATA + 'semantics/cleaned/occupations.json', 'w') as outfile:
         json.dump(classes, outfile)
         
@@ -105,35 +116,49 @@ def get_occupation_pages_part1():
             contents = line.split()
             glove_vocab.add(contents[0])
             
-    classes = ['stem', 'art', 'health']
-    wiki_pages = {} # title : request response
+    with open(DATA + 'semantics/cleaned/occupations.json', 'r') as infile:
+        classes = json.load(infile)
+        
+    all_occs = set()
     for clss in classes: 
-        with open(DATA + 'semantics/Occupations_' + clss + '.csv', 'r') as infile: 
-            for line in infile: 
-                if line.startswith('#http'): continue
-                if line.startswith('#'): 
-                    curr_cat = line.strip()
-                else: 
-                    wiki_title = line.strip().lower()
-                    toks = set(wiki_title.lower().split(' '))
-                    if len(toks) > 2: 
-                        # only unigrams and bigrams
-                        continue
-                    if toks & glove_vocab != toks: 
-                        # tokens need to be in glove
-                        continue
-                    response = requests.get('https://en.wikipedia.org/w/api.php?action=parse&page=' + wiki_title + '&prop=wikitext&formatversion=2&format=json&redirects')
-                    if not response.ok: 
-                        print("Problem with", wiki_title)
-                    response_dict = json.loads(response.text)
-                    if 'error' in response_dict: 
-                        print("Problem with", wiki_title, response_dict)
-                    else: 
-                        title = response_dict['parse']['title']
-                        pageid = response_dict['parse']['pageid']
-                        wiki_pages[wiki_title] = [title, pageid]
+        all_occs.update(classes[clss]['high'])
+        all_occs.update(classes[clss]['low'])
+            
+    wiki_pages = {} # title : request response
+    for wiki_title in all_occs: 
+        toks = set(wiki_title.lower().split(' '))
+        if len(toks) > 2: 
+            # only unigrams and bigrams
+            continue
+        if toks & glove_vocab != toks: 
+            # tokens need to be in glove
+            continue
+        response = requests.get('https://en.wikipedia.org/w/api.php?action=parse&page=' + wiki_title + '&prop=wikitext&formatversion=2&format=json&redirects')
+        if not response.ok: 
+            print("Problem with", wiki_title)
+        response_dict = json.loads(response.text)
+        if 'error' in response_dict: 
+            print("Problem with", wiki_title, response_dict)
+        else: 
+            title = response_dict['parse']['title']
+            if 'List of' in title or 'Lists of' in title: 
+                continue
+            pageid = response_dict['parse']['pageid']
+            wiki_pages[wiki_title] = [title, pageid]
     with open(DATA + 'semantics/occupation_wikipages.json', 'w') as outfile: 
         json.dump(wiki_pages, outfile)         
+        
+    # This version removes wikipedia job formatting
+    for clss in classes: 
+        for g in classes[clss]: 
+            new_list = []
+            old_list = classes[clss][g]
+            for occ in old_list: 
+                new_occ = re.sub("[\(].*?[\)]", "", occ).lower()
+                new_list.append(new_occ)
+            classes[clss][g] = new_list
+    with open(DATA + 'semantics/cleaned/occupations.json', 'w') as outfile:
+        json.dump(classes, outfile)
     
 def get_occupation_pages_part2(): 
     '''
@@ -164,8 +189,11 @@ def get_occupation_pages_part2():
                     if idx in pages_occ: 
                         # found an occupation page
                         occ = pages_occ[idx]
-                        text = doc.get_text()
-                        sents = tokenize.sent_tokenize(text)
+                        occ = re.sub("[\(].*?[\)]", "", occ).lower()
+                        text = doc.get_text().split('\n')
+                        sents = []
+                        for l in text: 
+                            sents.extend(tokenize.sent_tokenize(l))
                         for sent in sents: 
                             sent_lower = sent.lower()
                             matches = re.search(r'\b' + occ + r'\b', sent)
@@ -176,10 +204,9 @@ def get_occupation_pages_part2():
         json.dump(occ_sents, outfile)
     
 def prep_datasets():
-    #nrc_vad()
-    occupations()
+    #occupations()
     #get_occupation_pages_part1()
-    #get_occupation_pages_part2()
+    get_occupation_pages_part2()
     
 def get_semaxes(): 
     '''
@@ -375,17 +402,16 @@ def get_glove_vecs(vocab, axes_vocab, exp_name):
             glove_vecs[w] = rep
     return glove_vecs
 
-def save_frameaxis_inputs(file_path, lexicon_name, exp_name): 
+def save_frameaxis_inputs(file_path, sent_path, lexicon_name, exp_name): 
     '''
     For a lexicon that has scores for different words,
     saves vectors associated with that lexicon.
     '''
     with open(file_path, 'r') as infile:
         lexicon_dict = json.load(infile)
-    vocab = set()
-    for c in lexicon_dict: 
-        for score in lexicon_dict[c]: 
-            vocab.update(lexicon_dict[c][score])
+    with open(sent_path, 'r') as infile:
+        sent_dict = json.load(infile)
+    vocab = set(sent_dict.keys())
     
     axes, axes_vocab = load_wordnet_axes()
     glove_vecs = get_glove_vecs(vocab, axes_vocab, exp_name)
@@ -397,7 +423,7 @@ def save_frameaxis_inputs(file_path, lexicon_name, exp_name):
         word_order = []
         for score in lexicon_dict[c]: 
             for word in lexicon_dict[c][score]: 
-                if word not in glove_vecs: continue
+                if word not in vocab: continue
                 word_matrix.append(glove_vecs[word])
                 word_order.append(word)
                 if score == 'high': 
@@ -424,19 +450,8 @@ def load_inputs(file_path, lexicon_name):
         word_matrices[c] = np.load(LOGS + 'semantics_val/' + lexicon_name + '/' + c + '_words.npy')
 
     return adj_matrix, score_matrices, word_matrices
-        
-def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''): 
-    with open(file_path, 'r') as infile:
-        lexicon_dict = json.load(infile)
-    vocab = set()
-    for c in lexicon_dict: 
-        for score in lexicon_dict[c]: 
-            vocab.update(lexicon_dict[c][score])
-    axes, axes_vocab = load_wordnet_axes()
-    glove_vecs = get_glove_vecs(vocab, axes_vocab, exp_name)
-    adj_poles = get_poles(glove_vecs, axes)
-    _, score_matrices, word_matrices = load_inputs(file_path, lexicon_name)
-    
+
+def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False): 
     N = 1000 # number of bootstrap samples
     biases = defaultdict(dict) # {c : { pole : (bias_sep, effect, bias1, bias2) } }
     for c in score_matrices: 
@@ -475,7 +490,97 @@ def frameaxis_glove(file_path, lexicon_name, calc_effect=False, exp_name=''):
             else: 
                 effect = 0
             biases[c][pole] = (bias_sep, effect, b_t_f1, b_t_f2)
+    return biases
+        
+def frameaxis_glove(file_path, sent_path, lexicon_name, calc_effect=False, exp_name=''): 
+    '''
+    Need to call save_frameaxis_inputs() before running this function. 
+    '''
+    with open(file_path, 'r') as infile:
+        lexicon_dict = json.load(infile)
+    with open(sent_path, 'r') as infile:
+        sent_dict = json.load(infile)
+    vocab = set(sent_dict.keys())
+    axes, axes_vocab = load_wordnet_axes()
+    glove_vecs = get_glove_vecs(vocab, axes_vocab, exp_name)
+    adj_poles = get_poles(glove_vecs, axes)
+    _, score_matrices, word_matrices = load_inputs(file_path, lexicon_name)
+    
+    biases = frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=calc_effect)
                 
+    with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis_' + exp_name + '.json', 'w') as outfile:
+        json.dump(biases, outfile)
+        
+def get_poles_bert(axes, exp_name): 
+    assert 'bert' in exp_name
+    
+    adj_poles = {} # synset : (right_vec, left_vec)
+    if exp_name in ['bert-default', 'bert-zscore']: 
+        in_folder = LOGS + 'wikipedia/substitutes/bert-default/'
+    elif 'sub' in exp_name: 
+        if exp_name.startswith('bert-base-sub') and 'mask' not in exp_name: 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub/'
+        elif exp_name.startswith('bert-base-sub') and 'mask' in exp_name: 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub-mask/'
+        else: 
+            in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
+    elif 'prob' in exp_name: 
+        if exp_name.startswith('bert-base-prob'): 
+                in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
+    with open(in_folder + 'word_rep_key.json', 'r') as infile: 
+        word_rep_keys = json.load(infile)
+    for pole in sorted(axes.keys()): 
+        left = axes[pole][0] # list of words
+        left_pole = pole + '_left'
+        left_vec, _ = get_vecs_and_map(in_folder, left, left_pole, word_rep_keys, exp_name)
+        right = axes[pole][1] # list of words
+        right_pole = pole + '_right'
+        right_vec, _ = get_vecs_and_map(in_folder, right, right_pole, word_rep_keys, exp_name)
+        left_vec = np.array(left_vec)
+        right_vec = np.array(right_vec)
+        adj_poles[pole] = (left_vec, right_vec)
+    return adj_poles
+        
+def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False): 
+    with open(file_path, 'r') as infile:
+        lexicon_dict = json.load(infile)
+    with open(LOGS + 'semantics_val/' + lexicon_name + '_BERT.json', 'r') as infile: 
+        bert_vecs = json.load(infile)
+    if 'zscore' in exp_name: 
+        bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+        bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+        for vec in bert_vecs: 
+            bert_vecs[vec] = (np.array(bert_vecs[vec]) - bert_mean) / bert_std
+    else: 
+        for vec in bert_vecs: 
+            bert_vecs[vec] = np.array(bert_vecs[vec])
+        
+    axes, axes_vocab = load_wordnet_axes()
+    print("getting poles...")
+    adj_poles = get_poles_bert(axes, exp_name)
+        
+    print("getting matrices...")
+    score_matrices = {}
+    word_matrices = {} 
+    for c in lexicon_dict.keys(): 
+        word_matrix = []
+        score_matrix = []
+        word_order = []
+        for score in lexicon_dict[c]: 
+            for word in lexicon_dict[c][score]: 
+                if word not in bert_vecs: continue
+                word_matrix.append(bert_vecs[word])
+                word_order.append(word)
+                if score == 'high': 
+                    score_matrix.append(1)
+                elif score == 'low': 
+                    score_matrix.append(0)
+        score_matrices[c] = np.array(score_matrix)
+        word_matrices[c] = np.array(word_matrix)
+        
+    print("running frameaxis...")
+    biases = frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=calc_effect)
+    
     with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis_' + exp_name + '.json', 'w') as outfile:
         json.dump(biases, outfile)
         
@@ -575,7 +680,7 @@ def get_bert_vecs(exp_name='bert-default'):
             bert_vecs[vec] = np.array(bert_vecs[vec])
     return bert_vecs
 
-def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_name): 
+def get_vecs_and_map(in_folder, side, side_pole, word_rep_keys, exp_name): 
     '''
     Gets vectors for one side of a synset. 
     @outputs
@@ -585,43 +690,37 @@ def get_vecs_and_map(in_folder, side, side_pole, vec_dict, word_rep_keys, exp_na
     pole = side_pole.split('_')[0]
     if side_pole not in word_rep_keys: 
         # fall back on bert random
-        side_vec = [] # list of vectors 
-        rep_keys_map = defaultdict(list) 
-        i = 0
-        for w in side: 
-            ss_adj = w + '@' + side_pole
-            if ss_adj in vec_dict:  
-                side_vec.append(vec_dict[ss_adj])
-                rep_keys_map[w].append(i)
-                i += 1      
-    else:  
-        rep_keys = word_rep_keys[side_pole] # [[line_num, word]]
-        rep_keys_map = defaultdict(list) 
-        for i, rk in enumerate(rep_keys): 
-            line_num = rk[0]
-            w = rk[1]
-            rep_keys_map[w].append(i)
-        side_vec = np.load(in_folder + side_pole + '.npy')
-        if 'zscore' in exp_name: 
-            bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
-            bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
-            side_vec = (side_vec - bert_mean) / bert_std
+        in_folder = LOGS + 'wikipedia/substitutes/bert-default/'
+        with open(in_folder + 'word_rep_key.json', 'r') as infile: 
+            word_rep_keys = json.load(infile)
+ 
+    rep_keys = word_rep_keys[side_pole] # [[line_num, word]]
+    rep_keys_map = defaultdict(list) 
+    for i, rk in enumerate(rep_keys): 
+        line_num = rk[0]
+        w = rk[1]
+        rep_keys_map[w].append(i)
+    side_vec = np.load(in_folder + side_pole + '.npy')
+    if 'zscore' in exp_name: 
+        bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+        bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+        side_vec = (side_vec - bert_mean) / bert_std
     side_vec = np.ma.array(side_vec, mask=False)
     return side_vec, rep_keys_map
 
-def loo_val_nonagg(vec_dict, in_folder, axes, exp_name): 
+def loo_val_nonagg(in_folder, axes, exp_name): 
     with open(in_folder + 'word_rep_key.json', 'r') as infile: 
         word_rep_keys = json.load(infile)
     with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
         for pole in tqdm(sorted(axes.keys())): 
             left = axes[pole][0] # list of words
             left_pole = pole + '_left'
-            left_vec, lrep_keys_map = get_vecs_and_map(in_folder, left, left_pole, vec_dict, \
+            left_vec, lrep_keys_map = get_vecs_and_map(in_folder, left, left_pole, \
                                                                word_rep_keys, exp_name)
             
             right = axes[pole][1]
             right_pole = pole + '_right'
-            right_vec, rrep_keys_map = get_vecs_and_map(in_folder, right, right_pole, vec_dict, \
+            right_vec, rrep_keys_map = get_vecs_and_map(in_folder, right, right_pole, \
                                                                word_rep_keys, exp_name)
             
             for w in lrep_keys_map: 
@@ -651,10 +750,9 @@ def inspect_axes(exp_name):
         vec_dict = get_glove_vecs(vocab, axes_vocab, exp_name)
         loo_val_static(vec_dict, axes, exp_name)
         return
-    if 'bert' in exp_name: 
-        vec_dict = get_bert_vecs(exp_name)
     if exp_name in ['bert-default', 'bert-zscore']: 
-        loo_val(vec_dict, axes, exp_name)
+        in_folder = LOGS + 'wikipedia/substitutes/bert-default/'
+        loo_val_nonagg(in_folder, axes, exp_name)
     elif 'sub' in exp_name and 'bert' in exp_name: 
         if exp_name.startswith('bert-base-sub') and 'mask' not in exp_name: 
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub/'
@@ -662,26 +760,30 @@ def inspect_axes(exp_name):
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-sub-mask/'
         else: 
             in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
-        loo_val_nonagg(vec_dict, in_folder, axes, exp_name)
+        loo_val_nonagg(in_folder, axes, exp_name)
     elif 'prob' in exp_name and 'bert' in exp_name: 
         if exp_name.startswith('bert-base-prob'): 
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
-        loo_val_nonagg(vec_dict, in_folder, axes, exp_name)
+        loo_val_nonagg(in_folder, axes, exp_name)
     
 def main(): 
 #     prep_datasets()
 #     retrieve_wordnet_axes()
     #inspect_axes('default')
     #inspect_axes('glove-zscore')
-    #inspect_axes('bert-default')
-    #inspect_axes('bert-zscore')
-    #inspect_axes('bert-base-sub-mask')
-    #inspect_axes('bert-base-sub')
-    #inspect_axes('bert-base-sub-zscore')
-    #inspect_axes('bert-base-prob')
-    #inspect_axes('bert-base-prob-zscore')
-#     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='default')
-    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='default')
+#     inspect_axes('bert-default')
+#     inspect_axes('bert-zscore')
+#     inspect_axes('bert-base-sub-mask')
+#     inspect_axes('bert-base-sub')
+#     inspect_axes('bert-base-sub-zscore')
+#     inspect_axes('bert-base-prob')
+#     inspect_axes('bert-base-prob-zscore')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
+    save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
 
 if __name__ == '__main__':
     main()

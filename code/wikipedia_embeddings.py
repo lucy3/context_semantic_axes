@@ -112,7 +112,7 @@ def get_occupation_embeddings():
     res = {}
     for w in word_counts: 
         res[w] = list(word_reps[w] / word_counts[w])
-    with open(LOGS + 'semantics_val/occupation_BERT.json', 'w') as outfile: 
+    with open(LOGS + 'semantics_val/occupations_BERT.json', 'w') as outfile: 
         json.dump(res, outfile)
 
 def contains_vocab(tup, tokenizer=None, vocab=set()): 
@@ -347,7 +347,7 @@ def get_adj_embeddings(exp_name, save_agg=True):
                 else: 
                     token_ids_word = np.array(word_tokenids[word]) 
                 word_embed = vector[j][token_ids_word]
-                word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
+                word_embed = word_embed.mean(dim=0).detach().cpu().numpy() # average word pieces
                 if np.isnan(word_embed).any(): 
                     print("PROBLEM!!!", word, batch[j])
                     return 
@@ -358,6 +358,7 @@ def get_adj_embeddings(exp_name, save_agg=True):
                 else: 
                     word_reps[ss].append(word_embed)
                     word_rep_keys[ss].append([line_num, word])
+        torch.cuda.empty_cache()
     if save_agg: 
         res = {}
         for tup in word_counts: 
@@ -520,7 +521,7 @@ def main():
     #sample_wikipedia(vocab, 'adj')
     #get_axes_contexts()
     #print("----------------------")
-    #get_adj_embeddings('bert-default', save_agg=True)
+    #get_adj_embeddings('bert-default', save_agg=False)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
