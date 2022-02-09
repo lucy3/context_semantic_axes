@@ -4,6 +4,9 @@ from reddit and forum data
 
 One embedding for a word in each
 ideology and year 
+
+Example of use: 
+python reddit_forum_embeddings.py --dataset reddit --subset 2005
 """
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
 import argparse
@@ -107,11 +110,15 @@ def batch_reddit():
 def get_reddit_embeddings(): 
     year = args.subset
     batch_sentences, batch_words, batch_sr = batch_reddit()
+    
+    word_reps = {}
+    word_counts = Counter()
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
     model = BertModel.from_pretrained('bert-base-uncased')
     layers = [-4, -3, -2, -1] # last four layers
     model.to(device)
     model.eval()
+    
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
         word_tokenids = {} # { j : { word : [token ids] } }
         encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
@@ -121,6 +128,34 @@ def get_reddit_embeddings():
         states = outputs.hidden_states # tuple
         # batch_size x seq_len x 3072
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            # TODO: get category of subreddit 
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = defaultdict(list) # {word : [token ids]}
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word in batch_words[i][j]: 
+                        word_tokenids[curr_word].append(k)
+            for word in word_tokenids: 
+                token_ids_word = np.array(word_tokenids[word]) 
+                word_embed = vector[j][token_ids_word]
+                word_embed = word_embed.mean(dim=0).detach().cpu().numpy() # average word pieces
+                if np.isnan(word_embed).any(): 
+                    print("PROBLEM!!!", word, batch[j])
+                    return 
+                word_cat = word + '_' + cat
+                if word_cat not in word_reps: 
+                    word_reps[word_cat] = np.zeros(3072)
+                word_reps[word_cat] += word_embed
+                word_counts[word_cat] += 1
+        torch.cuda.empty_cache()
+        
+    res = {}
+    for w in word_counts: 
+        res[w] = list(word_reps[w] / word_counts[w])
+    with open(LOGS + 'semantics_mano/embed/' + args.dataset + '_' + args.subset + '.json', 'w') as outfile: 
+        json.dump(res, outfile)
 
 def get_forum_embeddings(): 
     pass
