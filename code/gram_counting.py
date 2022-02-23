@@ -6,6 +6,7 @@ from pyspark import SparkConf, SparkContext
 from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import Row, SQLContext
 from functools import partial
+from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set
 import os
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
@@ -58,21 +59,6 @@ def get_num_posts():
     with open(LOGS + 'submission_counts.json', 'w') as outfile:
         json.dump(sr_month, outfile)
 
-def check_valid_comment(line): 
-    '''
-    For Reddit comments
-    '''
-    comment = json.loads(line)
-    return 'body' in comment and comment['body'].strip() != '[deleted]' \
-            and comment['body'].strip() != '[removed]'
-
-def check_valid_post(line): 
-    '''
-    For Reddit posts
-    '''
-    d = json.loads(line)
-    return 'selftext' in d
-
 def get_n_gramlist(nngramlist, toks, sr, n=2):   
     # stack overflow said this was fastest
     for s in ngrams(toks,n=n):        
@@ -105,17 +91,6 @@ def get_ngrams_post(line, tokenizer=None, per_comment=True):
     if per_comment: 
         all_grams = list(set(all_grams))
     return all_grams
-
-def get_bot_set(): 
-    bots = set()
-    with open(ROOT + 'logs/reddit_bots.txt', 'r') as infile: 
-        for line in infile: 
-            bots.add(line.strip())
-    return bots
-    
-def remove_bots(line, bot_set=set()): 
-    d = json.loads(line)
-    return 'author' in d and d['author'] not in bot_set
 
 def count_sr(per_comment=True): 
     bots = get_bot_set()

@@ -7,10 +7,19 @@ ideology and year
 
 Example of use: 
 python reddit_forum_embeddings.py --dataset reddit --subset 2005
+python reddit_forum_embeddings.py --dataset reddit --preprocess
 """
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
 import argparse
-from gram_counting import check_valid_comment, check_valid_post, remove_bots, get_bot_set
+from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set, get_vocab
+import os
+import csv
+from nltk import tokenize
+from collections import defaultdict, Counter
+import json
+from tqdm import tqdm
+import torch
+import numpy as np
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
@@ -18,24 +27,18 @@ COMS = ROOT + 'data/comments/'
 CONTROL = ROOT + 'data/reddit_control/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
+SUB_META = ROOT + 'data/subreddits.txt'
+SEM_FOLDER = ROOT + 'logs/semantics_mano/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=True, type=str,
                     help='reddit, control, or forum')
-parser.add_argument('--subset', dest='accumulate', action='store_const',
-                    const=sum, default=max,
+parser.add_argument('--subset', type=str,
                     help='for reddit/control, should be a year, for forum, should be a forum')
 
 args = parser.parse_args()
 
-def get_vocab(): 
-    words = []
-    with open(ANN_FILE, 'r') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader: 
-            if row['keep'] == 'Y': 
-                words.append(row['entity'].lower())
-    return words
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def batch_reddit(): 
     vocab = get_vocab()
@@ -45,71 +48,81 @@ def batch_reddit():
     batch_size = 8
     batch_sentences = [] # each item is a list
     batch_words = [] # each item is a list
-    batch_sr = []
+    batch_meta = []
     curr_batch = []
     curr_words = []
     curr_meta = []
-    # go through comment file
-    for filename in os.listdir(COMS): 
-        if filename.startwith('RC_' + args.subset): 
-            m = filename.replace('RC_', '')
-            with open(COMS + filename + '/part-00000', 'r') as infile: 
-                for line in infile: 
-                    if not check_valid_comment(line): continue
-                    if not remove_bots(line, bot_set=bots): continue
-                    d = json.loads(line)
-                    sr = d['subreddit'].lower()
-                    tokens = tokenizer.tokenize(d['body'])
-                    words_in_line = []
-                    for i in range(len(tokens)): 
-                        if tokens[i] in vocab: 
-                            words_in_line.append(tokens[i])
-                    curr_batch.append(tokens)
-                    curr_words.append(words_in_line)
-                    curr_meta.append(sr)
-                    if len(curr_batch) == batch_size: 
-                        batch_sentences.append(curr_batch)
-                        batch_words.append(curr_words)
-                        batch_sr.append(curr_meta)
-                        curr_batch = []
-                        curr_words = []   
-                        curr_meta = []
-            if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
-                post_path = SUBS + 'RS_' + m + '/part-00000'
+    y = args.subset # somewhere between 2008 and 2019
+    with open(SEM_FOLDER + 'reddit_' + str(y) + '_id2sent.json', 'r') as infile: 
+        id2sent = json.load(infile)
+    with open(SEM_FOLDER + 'reddit_' + str(y) + '_word2id.json', 'r') as infile: 
+        word2id = json.load(infile)
+
+    sentID_unigrams = defaultdict(list) # {sentID : [terms in line]}
+    sentID_bigrams = defaultdict(list) # {sentID : [terms in line]}
+    sentID_meta = defaultdict(str) # {sentID : year_category}
+    for key in word2id: 
+        contents = key.split('_')
+        meta = '_'.join(contents[1:])
+        term = contents[0]
+        for sentID in word2id[key]: 
+            if ' ' in term: 
+                sentID_bigrams[sentID].append(term)
             else: 
-                post_path = SUBS + 'RS_v2_' + m + '/part-00000'
-            with open(post_path, 'r') as infile: 
-                # go through submission file 
-                for line in file: 
-                    if not check_valid_post(line): continue
-                    if not remove_bots(line, bot_set=bots): continue
-                    d = json.loads(line)
-                    sr = d['subreddit'].lower()
-                    tokens = tokenizer.tokenize(d['selftext'])
-                    words_in_line = []
-                    for i in range(len(tokens)): 
-                        if tokens[i] in vocab: 
-                            words_in_line.append(tokens[i])
-                    curr_batch.append(tokens)
-                    curr_words.append(words_in_line)
-                    curr_meta.append(sr)
-                    if len(curr_batch) == batch_size: 
-                        batch_sentences.append(curr_batch)
-                        batch_words.append(curr_words)
-                        batch_sr.append(curr_meta)
-                        curr_batch = []
-                        curr_words = [] 
-                        curr_meta = []
-                        
-            if len(curr_batch) != 0: # fence post
+                sentID_unigrams[sentID].append(term)
+            sentID_meta[sentID] = meta
+    
+    for sentID in tqdm(id2sent): 
+        sent = id2sent[sentID]
+        old_tokens = tokenizer.tokenize(sent)
+        meta = sentID_meta[sentID]
+        unigrams = sentID_unigrams[sentID]
+        if len(unigrams) > 0: 
+            curr_batch.append(old_tokens)
+            curr_words.append(unigrams)
+            curr_meta.append(meta)
+            if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
                 batch_words.append(curr_words)
-                batch_sr.append(curr_meta)
-    return batch_sentences, batch_words, batch_sr
+                batch_meta.append(curr_meta)
+                curr_batch = []
+                curr_words = []   
+                curr_meta = []
+        # we treat bigrams separately in case they contain unigrams
+        # this way, word ids to correspond to bigrams when needed
+        bigrams = sentID_bigrams[sentID]
+        if len(bigrams) > 0: 
+            tokens = []
+            i = 0
+            while i < len(old_tokens) - 1: 
+                bigram = ' '.join(old_tokens[i:i+2])
+                if bigram in bigrams: 
+                    tokens.append(bigram)
+                    i += 2
+                else: 
+                    tokens.append(old_tokens[i])
+                    i += 1
+            curr_batch.append(tokens)
+            curr_words.append(bigrams)
+            curr_meta.append(meta)
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                batch_words.append(curr_words)
+                batch_meta.append(curr_meta)
+                curr_batch = []
+                curr_words = []   
+                curr_meta = []
+    if len(curr_batch) != 0: # fence post
+        batch_sentences.append(curr_batch)
+        batch_words.append(curr_words)
+        batch_meta.append(curr_meta)
+    return batch_sentences, batch_words, batch_meta
 
 def get_reddit_embeddings(): 
     year = args.subset
-    batch_sentences, batch_words, batch_sr = batch_reddit()
+    batch_sentences, batch_words, batch_meta = batch_reddit()
+    
+    print("NUMBER OF BATCHES:", len(batch_sentences))
     
     word_reps = {}
     word_counts = Counter()
@@ -120,7 +133,6 @@ def get_reddit_embeddings():
     model.eval()
     
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
-        word_tokenids = {} # { j : { word : [token ids] } }
         encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
              return_tensors="pt")
         encoded_inputs.to(device)
@@ -129,7 +141,6 @@ def get_reddit_embeddings():
         # batch_size x seq_len x 3072
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
         for j in range(len(batch)): # for every example
-            # TODO: get category of subreddit 
             word_ids = encoded_inputs.word_ids(j)
             word_tokenids = defaultdict(list) # {word : [token ids]}
             for k, word_id in enumerate(word_ids): # for every token
@@ -144,7 +155,7 @@ def get_reddit_embeddings():
                 if np.isnan(word_embed).any(): 
                     print("PROBLEM!!!", word, batch[j])
                     return 
-                word_cat = word + '_' + cat
+                word_cat = word + '_' + batch_meta[i][j]
                 if word_cat not in word_reps: 
                     word_reps[word_cat] = np.zeros(3072)
                 word_reps[word_cat] += word_embed
@@ -154,7 +165,7 @@ def get_reddit_embeddings():
     res = {}
     for w in word_counts: 
         res[w] = list(word_reps[w] / word_counts[w])
-    with open(LOGS + 'semantics_mano/embed/' + args.dataset + '_' + args.subset + '.json', 'w') as outfile: 
+    with open(SEM_FOLDER + 'embed/' + args.dataset + '_' + args.subset + '.json', 'w') as outfile: 
         json.dump(res, outfile)
 
 def get_forum_embeddings(): 

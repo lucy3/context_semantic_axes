@@ -59,6 +59,8 @@ def get_occupation_embeddings():
             curr_batch.append(tokens)
             # take care of bigrams 
             curr_word_tokens = btokenizer.tokenize(occ)
+            # TODO: fix this using a sliding window of size len(curr_word_tokens) over tokens
+            # TODO: where if the current window == curr_word_tokens, add those word_ids to curr_words
             curr_words.append(curr_word_tokens)
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)

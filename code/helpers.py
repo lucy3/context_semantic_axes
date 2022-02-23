@@ -1,8 +1,19 @@
 import csv
 from collections import defaultdict
+import json
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 PEOPLE_FILE = ROOT + 'data/people.csv'
+ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
+
+def get_vocab(): 
+    words = []
+    with open(ANN_FILE, 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader: 
+            if row['keep'] == 'Y': 
+                words.append(row['entity'].lower())
+    return words
 
 def valid_line(text): 
     return text.strip() != '[removed]' and text.strip() != '[deleted]' and text.strip() != ''
@@ -39,3 +50,29 @@ def get_manual_people():
                 assert word_sing != ''
                 words.add(plural.lower())
     return words, sing2plural
+
+def check_valid_comment(line): 
+    '''
+    For Reddit comments
+    '''
+    comment = json.loads(line)
+    return 'body' in comment and comment['body'].strip() != '[deleted]' \
+            and comment['body'].strip() != '[removed]'
+
+def check_valid_post(line): 
+    '''
+    For Reddit posts
+    '''
+    d = json.loads(line)
+    return 'selftext' in d
+
+def get_bot_set(): 
+    bots = set()
+    with open(ROOT + 'logs/reddit_bots.txt', 'r') as infile: 
+        for line in infile: 
+            bots.add(line.strip())
+    return bots
+    
+def remove_bots(line, bot_set=set()): 
+    d = json.loads(line)
+    return 'author' in d and d['author'] not in bot_set
