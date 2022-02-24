@@ -3,11 +3,12 @@ Find growth and decline words
 """
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, split, sum
 from helpers import get_sr_cats
 import math
 from scipy.stats import spearmanr
-from collections import Counter
+from collections import Counter, defaultdict
+from functools import partial
 import json
 import numpy as np
 import csv
@@ -205,7 +206,11 @@ def smooth_time_series(dataset):
         matrix[i] = smoothed
     np.save(TIME_SERIES_DIR + 'time_series_' + dataset + '_smoothed_set.npy', matrix) 
     
-def main(): 
+def time_series_prep_and_run(): 
+    '''
+    Run this to get time series for each word
+    that can later be clustered using ksc. 
+    '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
@@ -215,6 +220,60 @@ def main():
     
     get_multiple_time_series('manosphere', sqlContext)
     smooth_time_series('manosphere')
+    
+    sc.stop()
+    
+def map_to_category(x, categories={}): 
+    if x.community in categories: 
+        cat = categories[x.community]
+    else: 
+        assert x.community.startswith('FORUM')
+        cat = x.community
+    return x.word,cat,x.year,x.summed_count
+    
+def calc_frequency_per_cat_year(): 
+    '''
+    This is used to accompany visualization of word embeddings
+    over time in reddit and forum datasets. 
+    
+    @input: combined_counts_set for reddit + forum
+    @output: nested dictionary of { cat_year { term : count } }
+    '''
+    conf = SparkConf()
+    sc = SparkContext(conf=conf)
+    sqlContext = SQLContext(sc)
+    
+    parquet_file = WORD_COUNT_DIR + 'combined_counts_set'
+    # word, count, community, month
+    df = sqlContext.read.parquet(parquet_file)
+    
+    words = []
+    with open(ANN_FILE, 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader: 
+            if row['keep'] == 'Y': 
+                words.append(row['entity'])
+                
+    # filter for words we care about
+    df = df.filter(df.word.isin(words))
+    df = df.withColumn("year", split(df.month, '-').getItem(0)).drop('month')
+    
+    df = df.groupby(['word', 'community', 'year']).agg(sum("count").alias("summed_count"))
+    categories = get_sr_cats()
+    df = df.rdd.map(partial(map_to_category, categories=categories)).toDF(['word', 'category', 'year', 'summed_count'])
+    df = df.collect()
+    
+    count_dict = defaultdict(dict) # { cat_year { term : count } }
+    for row in df: 
+        count_dict[row.category + '_' + str(row.year)][row.word] = row.summed_count
+    with open(WORD_COUNT_DIR + 'combined_catyear_word_count.json', 'w') as outfile: 
+        json.dump(count_dict, outfile)
+    
+    sc.stop()
+    
+def main(): 
+    # time_series_prep_and_run()
+    calc_frequency_per_cat_year()
 
 if __name__ == '__main__':
     main()
