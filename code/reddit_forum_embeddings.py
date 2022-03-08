@@ -53,9 +53,9 @@ def batch_reddit():
     curr_words = []
     curr_meta = []
     y = args.subset # somewhere between 2008 and 2019
-    with open(SEM_FOLDER + 'reddit_' + str(y) + '_id2sent.json', 'r') as infile: 
+    with open(SEM_FOLDER + args.dataset + '_' + str(y) + '_id2sent.json', 'r') as infile: 
         id2sent = json.load(infile)
-    with open(SEM_FOLDER + 'reddit_' + str(y) + '_word2id.json', 'r') as infile: 
+    with open(SEM_FOLDER + args.dataset + '_' + str(y) + '_word2id.json', 'r') as infile: 
         word2id = json.load(infile)
 
     sentID_unigrams = defaultdict(list) # {sentID : [terms in line]}
@@ -171,16 +171,13 @@ def get_reddit_embeddings():
 def get_forum_embeddings(): 
     pass
 
-def get_control_embeddings(): 
-    pass
-
 def main(): 
     if 'reddit' == args.dataset: 
         get_reddit_embeddings()
     elif 'forum' == args.dataset: 
         get_forum_embeddings() 
     elif 'control' == args.dataset: 
-        get_control_embeddings()
+        get_reddit_embeddings()
 
 if __name__ == '__main__':
     main()

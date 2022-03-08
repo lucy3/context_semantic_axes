@@ -452,6 +452,9 @@ def load_inputs(file_path, lexicon_name):
     return adj_matrix, score_matrices, word_matrices
 
 def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False): 
+    '''
+    TODO: unsure why I concatenate and then slice this_adj_matrix
+    '''
     N = 1000 # number of bootstrap samples
     biases = defaultdict(dict) # {c : { pole : (bias_sep, effect, bias1, bias2) } }
     for c in score_matrices: 
@@ -526,7 +529,7 @@ def get_poles_bert(axes, exp_name):
             in_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
     elif 'prob' in exp_name: 
         if exp_name.startswith('bert-base-prob'): 
-                in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
     with open(in_folder + 'word_rep_key.json', 'r') as infile: 
         word_rep_keys = json.load(infile)
     for pole in sorted(axes.keys()): 
