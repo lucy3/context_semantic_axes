@@ -20,6 +20,14 @@ COMMENTS = ROOT + 'data/comments/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 BOTS = LOGS + 'reddit_bots.txt'
 
+# ROOT = '/mnt/data0/lucy/manosphere/'
+# DLOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
+# LOGS = ROOT + 'logs/'
+# POSTS = ROOT + 'data/submissions/'
+# COMMENTS = ROOT + 'data/comments/'
+# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
+# BOTS = DLOGS + 'reddit_bots.txt'
+
 def main():
     '''
     Output format: subreddit \t cluster1word1$cluster1word2 \t cluster2word1$cluster2word2$cluster2word3$cluster2word4 \n
@@ -51,7 +59,7 @@ def main():
     month = f.replace('RC_', '')
 
 
-    outfile = open(LOGS + 'coref_people2/' + month, 'w')
+    outfile = open(LOGS + 'coref_reddit_trial/' + month, 'w')
 
     error_outfile = open(LOGS + "reddit_errors", 'w')
 
@@ -80,18 +88,22 @@ def main():
                 for c in doc._.coref_clusters: # for coref cluster in doc
                     keep_cluster = False
                     for s in c.mentions: # for span in cluster
-                        if s.text in words: # SCENARIO 2
+                        if s.text.lower() in words: # SCENARIO 2
                             keep_cluster = True
                             break
                         if s[0].dep_ in {'det','poss'}: # SCENARIO 1
                             new_s = s[1:]
-                            if new_s.text in words:
+                            if new_s.text.lower() in words:
                                 keep_cluster = True
                                 break
                     if keep_cluster:
                         curr_cluster = []
                         for s in c.mentions: # for span in cluster
-                            curr_cluster.append(s.text.lower())
+                            entity = s.text.lower()
+                            entity = entity.replace("\n", "")
+                            entity = entity.replace("\r", "")
+                            entity = entity.replace("\t", "")
+                            curr_cluster.append(entity)
                         outstring += "$".join(curr_cluster) + "\t"
 
                 outfile.write(sr.lower() + "\t" + outstring)
@@ -130,18 +142,22 @@ def main():
                 for c in doc._.coref_clusters: # for coref cluster in doc
                     keep_cluster = False
                     for s in c.mentions: # for span in cluster
-                        if s.text in words: # SCENARIO 2
+                        if s.text.lower() in words: # SCENARIO 2
                             keep_cluster = True
                             break
                         if s[0].dep_ in {'det','poss'}: # SCENARIO 1
                             new_s = s[1:]
-                            if new_s.text in words:
+                            if new_s.text.lower() in words:
                                 keep_cluster = True
                                 break
                     if keep_cluster:
                         curr_cluster = []
                         for s in c.mentions: # for span in cluster
-                            curr_cluster.append(s.text.lower())
+                            entity = s.text.lower()
+                            entity = entity.replace("\n", "")
+                            entity = entity.replace("\r", "")
+                            entity = entity.replace("\t", "")
+                            curr_cluster.append(entity)
                         outstring += "$".join(curr_cluster) + "\t"
 
                 outfile.write(sr.lower() + "\t" + outstring)
@@ -194,5 +210,4 @@ def check_valid_post(line):
 
 if __name__ == '__main__':
     main()
-
 

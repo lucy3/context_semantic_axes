@@ -1,3 +1,4 @@
+
 '''
 Goal: get pronouns that refer to
 a word in our vocabulary.
@@ -13,28 +14,11 @@ import neuralcoref
 from collections import defaultdict
 
 
-# ROOT = '/global/scratch/users/dtadimeti/manosphere/'
-# POSTS = ROOT + 'data/submissions/'
-# LOGS = ROOT + 'logs/'
-# COMMENTS = ROOT + 'data/comments/'
-# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-# BOTS = LOGS + 'reddit_bots.txt'
-
-
 ROOT = '/global/scratch/users/dtadimeti/manosphere/'
 LOGS = ROOT + 'logs/'
-FORUMS = ROOT + 'data/cleaned_forums/'
+REDDIT_CONTROL = ROOT + 'data/reddit_control/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-
-
-
-# ROOT = '/mnt/data0/lucy/manosphere/'
-# DLOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
-# LOGS = ROOT + 'logs/'
-# POSTS = ROOT + 'data/submissions/'
-# COMMENTS = ROOT + 'data/comments/'
-# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-# BOTS = DLOGS + 'reddit_bots.txt'
+BOTS = LOGS + 'reddit_bots.txt'
 
 def main():
     '''
@@ -64,28 +48,29 @@ def main():
     neuralcoref.add_to_pipe(nlp)
 
     f = sys.argv[1]
-    forum_name = sys.argv[1]
-    outfile = open(LOGS + 'coref_forums/' + forum_name, 'w')
+    month = f.replace('RC_', '')
 
-    error_outfile = open(LOGS + "forum_errors", 'w')
 
-    with open(FORUMS + forum_name,'r') as infile:
+    outfile = open(LOGS + 'coref_reddit_control/' + month, 'w')
+
+    error_outfile = open(LOGS + "reddit_control_errors", 'w')
+
+    with open(REDDIT_CONTROL + month + '/part-00000', 'r') as infile:
         for line in infile:
             d = json.loads(line)
+            sr = d['subreddit']
 
-            # skip the really long post (id_post: 2380578)
-            if forum_name == "incels" and d["id_post"] == 2380578: continue
+            if check_valid_post(line) and not check_valid_comment(line):
+                text = d['selftext']
 
-            text = d['text_post']
-            date_post = d['date_post']
-            if d['date_post'] is None: continue
+            if check_valid_comment(line) and not check_valid_post(line):
+                text = d['body']
 
-            if not check_valid_forum(line):
-                outfile.write(date)
+            if not check_valid_post(line) and not check_valid_comment(line):
+                outfile.write(sr.lower())
                 outfile.write("\n")
                 continue
 
-            date = date_post[0:10]
 
             try:
                 # run the coref on text
@@ -93,6 +78,8 @@ def main():
 
             except MemoryError:
                 error_outfile.write(line + '\n')
+                outfile.write(sr.lower())
+                outfile.write("\n")
                 continue
 
             else:
@@ -116,25 +103,52 @@ def main():
                             curr_cluster.append(entity)
                         outstring += "$".join(curr_cluster) + "\t"
 
-                outfile.write(date + "\t" + outstring)
+                outfile.write(sr.lower() + "\t" + outstring)
                 outfile.write("\n")
 
 
     outfile.close()
 
-
-def check_valid_forum(line):
+def check_valid_comment(line):
     '''
-    For forums posts
+    For Reddit comments
     '''
-    post = json.loads(line)
-    if 'text_post' not in post: return False
-    text = post['text_post']
+    comment = json.loads(line)
+    if 'body' not in comment: return False
+    text = comment['body']
     if len(text) > 1000000: return False
     if text == "" or text == "[deleted]" or text == "[removed]": return False
 
+    # read in bots from reddit_bots.txt, create list
+    bots = []
+    with open(BOTS, 'r') as infile:
+        for line in infile:
+            bots.append(line)
+
+    author = comment['author']
+    if author in bots: return False
+
     return True
 
+def check_valid_post(line):
+    '''
+    For Reddit posts
+    '''
+    post = json.loads(line)
+    if 'selftext' not in post: return False
+    text = post['selftext']
+    if len(text) > 1000000: return False
+    if text == "" or text == "[deleted]" or text == "[removed]": return False
+
+    # read in bots from reddit_bots.txt, create list
+    bots = []
+    with open(BOTS, 'r') as infile:
+        for line in infile:
+            bots.append(line)
+    author = post['author']
+    if author in bots: return False
+
+    return True
 
 
 if __name__ == '__main__':
