@@ -8,6 +8,7 @@ COREF_LOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
 COREF_REDDIT = COREF_LOGS + 'coref_reddit/'
 COREF_FORUMS = COREF_LOGS + 'coref_forums/'
 COREF_CONTROL = COREF_LOGS + 'coref_control/'
+SUB_META = ROOT + 'data/subreddits.txt'
 
 from collections import defaultdict, Counter
 from tqdm import tqdm
@@ -45,10 +46,25 @@ def get_pronoun_map():
         pronoun_map[p] = 'you'
     return pronoun_map
 
+def get_subreddit_categories(): 
+    categories = defaultdict(str)
+    categories_rev = defaultdict(list)
+    with open(SUB_META, 'r') as infile: 
+        reader = csv.DictReader(infile)
+        for row in reader: 
+            name = row['Subreddit'].strip().lower()
+            if name.startswith('/r/'): name = name[3:]
+            if name.startswith('r/'): name = name[2:]
+            if name.endswith('/'): name = name[:-1]
+            categories[name] = row['Category after majority agreement']
+            categories_rev[row['Category after majority agreement']].append(name)
+    return categories, categories_rev
+
 def main(): 
     # load vocabulary 
     words = load_vocabulary()
     pronoun_map = get_pronoun_map()
+    categories, categories_rev = get_subreddit_categories()
     
     d = defaultdict(list) # { (month, community, word) : [fem, masc, masc, fem, etc...] } 
     
@@ -58,8 +74,14 @@ def main():
         with open(COREF_REDDIT + year_month, 'r') as infile: 
             for line in infile: 
                 contents = line.strip().split('\t')
-                if len(contents) <= 1: continue # no clusters
+                if len(contents) <= 1: 
+                    line_num += 1
+                    continue # no clusters
                 community = contents[0]
+                cat = categories[community]
+                if cat == 'Health' or cat == 'Criticism': 
+                    line_num += 1
+                    continue
                 for clust in contents[1:]:
                     clust = set(clust.lower().split('$'))
                     clust_vocab_terms = set()
@@ -84,14 +106,12 @@ def main():
                             pronouns.add(pronoun_map[term])
                             
                     if len(clust_vocab_terms) == 0: 
-                        print(clust, pronouns)
-                        print(line)
                         error_file.write(str(line_num) + ' ' + year_month + '\n')
                         error_file.write('$'.join(clust) + '\n')
                             
                     for k in clust_vocab_terms: 
                         for pn in pronouns: 
-                            d[(year_month, community, k)].append(pn)
+                            d[(year_month, cat, k)].append(pn)
                 line_num += 1
                             
     print("Creating dataframe...")
@@ -119,82 +139,6 @@ def main():
     df = pd.DataFrame.from_dict(dataframe_d)
     
     df.to_csv(OUT_FOLDER + 'coref_reddit_df.csv', index=False, header=True)
-    
-# def old(): 
-                
-#     d = defaultdict(list) # { (month, community, word) : [fem, masc, masc, fem, etc...] } 
-    
-#     fem = set(['she', 'her', 'hers', 'herself'])
-#     masc = set(['he', 'him', 'his', 'himself'])
-#     neut = set(['they', 'them', 'their', 'theirs', 'themself', 'themselves'])
-#     it = set(['it', 'its', 'itself'])
-#     you = set(['you', 'your', 'yours', 'yourself', 'yourselves'])
-    
-#     print("Going over coref output...")
-#     error_file = open(LOGS + '2017-09_errors.temp', 'w')
-#     for month in tqdm(os.listdir(COREF)):
-#         if month.endswith('_control') or month == '.DS_Store': continue
-#         with open(COREF + month, 'r') as infile:
-#             for line_number, line in enumerate(infile): 
-#                 contents = line.strip().split('\t')
-#                 if len(contents) <= 1: continue
-#                 community = contents[0]
-#                 for i in range(1, len(contents)): 
-#                     cluster = contents[i].lower().split('$')
-#                     key = None
-#                     val = set()
-#                     for w in cluster: 
-#                         w_tokens = w.split(' ')
-#                         w_except_first = ' '.join(w_tokens[1:])
-#                         if w in words: 
-#                             key = w
-#                         elif w_except_first in words: 
-#                             key = w_except_first
-#                         elif w in fem: 
-#                             val.add('fem')
-#                         elif w in masc: 
-#                             val.add('masc')
-#                         elif w in neut: 
-#                             val.add('neut')
-#                         elif w in it:
-#                             val.add('it')
-#                         elif w in you:
-#                             val.add('you')
-	
-#                     if key is None: 
-#                         error_file.write("PROBLEM WITH:" + contents[i] + '\n')
-#                         error_file.write("LINE NUMBER: " + str(line_number) + '\n')
-#                         error_file.write(month + '\t' + line + '\n')
-#                         error_file.write("-------\n")
-#                     for v in val:
-#                         d[(month, community, key)].append(v)
-#     error_file.close()                 
-    
-#     print("Creating dataframe...")
-#     dataframe_d = {'month': [],
-#                    'community': [], 
-#                    'word': [], 
-#                    'fem': [], # count
-#                    'masc': [], # count
-#                    'neut': [], # count
-# 		   'it': [],
-# 		   'you': []
-#                   }
-#     for tup in tqdm(d): 
-#         month, community, word = tup
-#         pronoun_count = Counter(d[tup])
-#         dataframe_d['month'].append(month)
-#         dataframe_d['community'].append(community)
-#         dataframe_d['word'].append(word)
-#         dataframe_d['fem'].append(pronoun_count['fem'])
-#         dataframe_d['masc'].append(pronoun_count['masc'])
-#         dataframe_d['neut'].append(pronoun_count['neut'])
-#         dataframe_d['it'].append(pronoun_count['it'])
-#         dataframe_d['you'].append(pronoun_count['you'])
-        
-#     df = pd.DataFrame.from_dict(dataframe_d)
-    
-#     #df.to_csv(LOGS + 'coref_forums_df.csv', index=False, header=True)
         
 
 if __name__ == "__main__":
