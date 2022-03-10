@@ -51,7 +51,7 @@ def main():
     month = f.replace('RC_', '')
 
 
-    outfile = open(LOGS + 'coref_reddit_control/' + month, 'w')
+    outfile = open(LOGS + 'coref_results/CONTROL_' + month, 'w')
     writer = csv.writer(outfile, delimiter='\t')
 
     error_outfile = open(LOGS + "reddit_control_errors", 'w')

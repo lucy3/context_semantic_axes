@@ -47,7 +47,7 @@ def main():
 
     f = sys.argv[1]
     forum_name = sys.argv[1]
-    outfile = open(LOGS + 'coref_forums/' + forum_name, 'w')
+    outfile = open(LOGS + 'coref_results/' + forum_name, 'w')
     writer = csv.writer(outfile, delimiter='\t')
 
     error_outfile = open(LOGS + "forum_errors", 'w')
