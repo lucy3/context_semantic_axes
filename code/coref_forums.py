@@ -42,7 +42,7 @@ def main():
 
 
     # load coref
-    nlp = spacy.load('en')
+    nlp = spacy.load('en_core_web_sm')
     neuralcoref.add_to_pipe(nlp)
 
     f = sys.argv[1]
