@@ -13,20 +13,12 @@ import neuralcoref
 from collections import defaultdict
 
 
-ROOT = '/global/scratch/users/dtadimeti/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
 POSTS = ROOT + 'data/submissions/'
 LOGS = ROOT + 'logs/'
 COMMENTS = ROOT + 'data/comments/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 BOTS = LOGS + 'reddit_bots.txt'
-
-# ROOT = '/mnt/data0/lucy/manosphere/'
-# DLOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
-# LOGS = ROOT + 'logs/'
-# POSTS = ROOT + 'data/submissions/'
-# COMMENTS = ROOT + 'data/comments/'
-# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-# BOTS = DLOGS + 'reddit_bots.txt'
 
 def main():
     '''
@@ -60,6 +52,7 @@ def main():
 
 
     outfile = open(LOGS + 'coref_reddit_trial/' + month, 'w')
+    writer = csv.writer(outfile, delimiter='\t')
 
     error_outfile = open(LOGS + "reddit_errors", 'w')
 
@@ -70,8 +63,7 @@ def main():
             sr = d['subreddit']
 
             if not check_valid_comment(line):
-                outfile.write(sr.lower())
-                outfile.write("\n")
+                writer.writerow([sr.lower()])
                 continue
 
 
@@ -80,11 +72,12 @@ def main():
                 doc = nlp(text)
 
             except MemoryError:
+                writer.writerow([sr.lower()])
                 error_outfile.write(line + '\n')
                 continue
 
             else:
-                outstring = ''
+                outstring = [sr.lower()]
                 for c in doc._.coref_clusters: # for coref cluster in doc
                     keep_cluster = False
                     for s in c.mentions: # for span in cluster
@@ -104,10 +97,9 @@ def main():
                             entity = entity.replace("\r", "")
                             entity = entity.replace("\t", "")
                             curr_cluster.append(entity)
-                        outstring += "$".join(curr_cluster) + "\t"
+                        outstring.append("$".join(curr_cluster))
 
-                outfile.write(sr.lower() + "\t" + outstring)
-                outfile.write("\n")
+                writer.writerow(outstring)
 
 
 

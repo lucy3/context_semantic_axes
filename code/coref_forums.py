@@ -13,28 +13,10 @@ import neuralcoref
 from collections import defaultdict
 
 
-# ROOT = '/global/scratch/users/dtadimeti/manosphere/'
-# POSTS = ROOT + 'data/submissions/'
-# LOGS = ROOT + 'logs/'
-# COMMENTS = ROOT + 'data/comments/'
-# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-# BOTS = LOGS + 'reddit_bots.txt'
-
-
-ROOT = '/global/scratch/users/dtadimeti/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
 LOGS = ROOT + 'logs/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-
-
-
-# ROOT = '/mnt/data0/lucy/manosphere/'
-# DLOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
-# LOGS = ROOT + 'logs/'
-# POSTS = ROOT + 'data/submissions/'
-# COMMENTS = ROOT + 'data/comments/'
-# ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-# BOTS = DLOGS + 'reddit_bots.txt'
 
 def main():
     '''
@@ -66,6 +48,7 @@ def main():
     f = sys.argv[1]
     forum_name = sys.argv[1]
     outfile = open(LOGS + 'coref_forums/' + forum_name, 'w')
+    writer = csv.writer(outfile, delimiter='\t')
 
     error_outfile = open(LOGS + "forum_errors", 'w')
 
@@ -79,13 +62,12 @@ def main():
             text = d['text_post']
             date_post = d['date_post']
             if d['date_post'] is None: continue
+                
+            date = date_post[0:10]
 
             if not check_valid_forum(line):
-                outfile.write(date)
-                outfile.write("\n")
+                writer.writerow([date])
                 continue
-
-            date = date_post[0:10]
 
             try:
                 # run the coref on text
@@ -93,10 +75,11 @@ def main():
 
             except MemoryError:
                 error_outfile.write(line + '\n')
+                writer.writerow([date])
                 continue
 
             else:
-                outstring = ''
+                outstring = [date]
                 for c in doc._.coref_clusters: # for coref cluster in doc
                     keep_cluster = False
                     for s in c.mentions: # for span in cluster
@@ -114,10 +97,9 @@ def main():
                             entity = s.text.lower()
                             entity = entity.replace("\n", "")
                             curr_cluster.append(entity)
-                        outstring += "$".join(curr_cluster) + "\t"
+                        outstring.append("$".join(curr_cluster))
 
-                outfile.write(date + "\t" + outstring)
-                outfile.write("\n")
+                writer.writerow(outstring)
 
 
     outfile.close()

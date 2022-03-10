@@ -45,7 +45,7 @@ def get_subreddit_categories():
 def preprocess_text(text, idx, cat, tokenizer=None, vocab=set()): 
     '''
     idx is the comment/post's ID, and id_suffix is the sentence ID
-    cat is reddit category + year 
+    cat is category + year 
     '''
     sents = tokenize.sent_tokenize(text)
     id2sent = [] # (idx + id_suffix, sent)
@@ -219,10 +219,54 @@ def preprocess_dataset_control():
             json.dump(all_id2sent, outfile)
                 
     sc.stop()
+    
+def preprocess_post(line, tokenizer=None, year='', vocab=set(), categories={}): 
+    d = json.loads(line)
+    sr = d['subreddit'].lower()
+    idx = d['id']
+    if sr not in categories: 
+        # health or criticism
+        return ([], [])
+    cat = categories[sr] + '_' + year
+    word2id, id2sent = preprocess_text(d['selftext'], idx, cat, tokenizer=tokenizer, vocab=vocab)
+    return (word2id, id2sent)
+    
+def preprocess_forum_post(line, tokenizer=None, forum='', vocab=set(), categories={}): 
+    d = json.loads(line)
+    idx = str(d['id_post'])
+    if d['date_post'] is None: 
+        year = "None"
+    else: 
+        date_time_str = d["date_post"].split('-')
+        year = date_time_str[0]
+    cat = forum + '_' + year
+    word2id, id2sent = preprocess_text(d['text_post'], idx, cat, tokenizer=tokenizer, vocab=vocab)
+    return (word2id, id2sent)
+    
+def preprocess_dataset_forums(): 
+    vocab = get_vocab()
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    
+    for filename in os.listdir(FORUMS):
+        data = sc.textFile(FORUMS + filename)
+        data = data.map(partial(preprocess_forum_post, tokenizer=tokenizer, forum=filename, vocab=vocab))
+        word2id = data.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
+        word2id = word2id.reduceByKey(lambda n1, n2: n1 + n2)
+        id2sent = data.flatMap(lambda x: x[1])
+        all_word2id = word2id.map(exact_sample).collectAsMap()
+        ids_to_keep = set()
+        for k in all_word2id: 
+            ids_to_keep.update(all_word2id[k])
+        all_id2sent = id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
+        with open(LOGS + 'semantics_mano/forum_' + filename + '_word2id.json', 'w') as outfile: 
+            json.dump(all_word2id, outfile)
+        with open(LOGS + 'semantics_mano/forum_' + filename + '_id2sent.json', 'w') as outfile: 
+            json.dump(all_id2sent, outfile)
 
 def main(): 
     #preprocess_dataset_reddit()
-    preprocess_dataset_control()
+    #preprocess_dataset_control()
+    preprocess_dataset_forums()
 
 if __name__ == '__main__':
     main()

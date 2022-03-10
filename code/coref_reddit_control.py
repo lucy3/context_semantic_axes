@@ -14,7 +14,7 @@ import neuralcoref
 from collections import defaultdict
 
 
-ROOT = '/global/scratch/users/dtadimeti/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
 LOGS = ROOT + 'logs/'
 REDDIT_CONTROL = ROOT + 'data/reddit_control/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
@@ -52,6 +52,7 @@ def main():
 
 
     outfile = open(LOGS + 'coref_reddit_control/' + month, 'w')
+    writer = csv.writer(outfile, delimiter='\t')
 
     error_outfile = open(LOGS + "reddit_control_errors", 'w')
 
@@ -67,8 +68,7 @@ def main():
                 text = d['body']
 
             if not check_valid_post(line) and not check_valid_comment(line):
-                outfile.write(sr.lower())
-                outfile.write("\n")
+                writer.writerow([sr.lower()])
                 continue
 
 
@@ -78,12 +78,11 @@ def main():
 
             except MemoryError:
                 error_outfile.write(line + '\n')
-                outfile.write(sr.lower())
-                outfile.write("\n")
+                writer.writerow([sr.lower()])
                 continue
 
             else:
-                outstring = ''
+                outstring = [sr.lower()]
                 for c in doc._.coref_clusters: # for coref cluster in doc
                     keep_cluster = False
                     for s in c.mentions: # for span in cluster
@@ -101,10 +100,9 @@ def main():
                             entity = s.text.lower()
                             entity = entity.replace("\n", "")
                             curr_cluster.append(entity)
-                        outstring += "$".join(curr_cluster) + "\t"
+                        outstring.append("$".join(curr_cluster))
 
-                outfile.write(sr.lower() + "\t" + outstring)
-                outfile.write("\n")
+                writer.writerow(outstring)
 
 
     outfile.close()
