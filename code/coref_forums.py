@@ -101,7 +101,6 @@ def main():
 
                 writer.writerow(outstring)
 
-
     outfile.close()
 
 

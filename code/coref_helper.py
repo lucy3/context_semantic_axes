@@ -2,12 +2,9 @@
 For calculating gender leaning
 """
 ROOT = '/mnt/data0/lucy/manosphere/'
-OUT_FOLDER = ROOT + 'logs/coref_results/'
+COREF_FOLDER = ROOT + 'logs/coref_results/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 COREF_LOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
-COREF_REDDIT = COREF_LOGS + 'coref_reddit/'
-COREF_FORUMS = COREF_LOGS + 'coref_forums/'
-COREF_CONTROL = COREF_LOGS + 'coref_control/'
 SUB_META = ROOT + 'data/subreddits.txt'
 
 from collections import defaultdict, Counter
@@ -60,7 +57,7 @@ def get_subreddit_categories():
             categories_rev[row['Category after majority agreement']].append(name)
     return categories, categories_rev
 
-def main(): 
+def create_reddit_df(dataset): 
     # load vocabulary 
     words = load_vocabulary()
     pronoun_map = get_pronoun_map()
@@ -68,12 +65,15 @@ def main():
     
     d = defaultdict(list) # { (month, community, word) : [fem, masc, masc, fem, etc...] } 
     
-    error_file = open(OUT_FOLDER + 'reddit_errors.temp', 'w')
-    for year_month in tqdm(os.listdir(COREF_REDDIT)):
+    error_file = open(COREF_FOLDER + 'reddit_errors.temp', 'w')
+    for filename in tqdm(os.listdir(COREF_FOLDER)):
+        if not filename.startswith(dataset): continue
+        year_month = filename.replace(dataset + '_', '')
+        year = year_month.split('-')[0]
         line_num = 0
-        with open(COREF_REDDIT + year_month, 'r') as infile: 
-            for line in infile: 
-                contents = line.strip().split('\t')
+        with open(COREF_FOLDER + filename, 'r') as infile: 
+            reader = csv.reader(infile, delimiter='\t')
+            for contents in reader: 
                 if len(contents) <= 1: 
                     line_num += 1
                     continue # no clusters
@@ -104,42 +104,45 @@ def main():
                         # find pronouns
                         if term in pronoun_map: 
                             pronouns.add(pronoun_map[term])
-                            
+
                     if len(clust_vocab_terms) == 0: 
                         error_file.write(str(line_num) + ' ' + year_month + '\n')
+                        error_file.write('\t'.join(contents) + '\n')
                         error_file.write('$'.join(clust) + '\n')
-                            
+
                     for k in clust_vocab_terms: 
                         for pn in pronouns: 
-                            d[(year_month, cat, k)].append(pn)
+                            d[(year, cat, k)].append(pn)
                 line_num += 1
                             
     print("Creating dataframe...")
-    dataframe_d = {'month': [],
+    dataframe_d = {'year': [],
                    'community': [], 
                    'word': [], 
                    'fem': [], # count
                    'masc': [], # count
-                   'neut': [], # count
+                   'they': [], # count
                    'it': [],
                    'you': []
                           }
     for tup in tqdm(d): 
-        month, community, word = tup
+        year, community, word = tup
         pronoun_count = Counter(d[tup])
-        dataframe_d['month'].append(month)
+        dataframe_d['year'].append(year)
         dataframe_d['community'].append(community)
         dataframe_d['word'].append(word)
         dataframe_d['fem'].append(pronoun_count['fem'])
         dataframe_d['masc'].append(pronoun_count['masc'])
-        dataframe_d['neut'].append(pronoun_count['neut'])
+        dataframe_d['they'].append(pronoun_count['they'])
         dataframe_d['it'].append(pronoun_count['it'])
         dataframe_d['you'].append(pronoun_count['you'])
         
     df = pd.DataFrame.from_dict(dataframe_d)
     
-    df.to_csv(OUT_FOLDER + 'coref_reddit_df.csv', index=False, header=True)
-        
+    df.to_csv(COREF_FOLDER + 'coref_' + dataset + '_df.csv', index=False, header=True)
+    
+def main(): 
+    create_reddit_df('CONTROL')
 
 if __name__ == "__main__":
     main()

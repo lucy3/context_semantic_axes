@@ -40,10 +40,9 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def batch_reddit(): 
+def batch_data(): 
     vocab = get_vocab()
     tokenizer = BasicTokenizer(do_lower_case=True)
-    bots = get_bot_set()
 
     batch_size = 8
     batch_sentences = [] # each item is a list
@@ -118,9 +117,9 @@ def batch_reddit():
         batch_meta.append(curr_meta)
     return batch_sentences, batch_words, batch_meta
 
-def get_reddit_embeddings(): 
+def get_embeddings(): 
     year = args.subset
-    batch_sentences, batch_words, batch_meta = batch_reddit()
+    batch_sentences, batch_words, batch_meta = batch_data()
     
     print("NUMBER OF BATCHES:", len(batch_sentences))
     
@@ -168,16 +167,13 @@ def get_reddit_embeddings():
     with open(SEM_FOLDER + 'embed/' + args.dataset + '_' + args.subset + '.json', 'w') as outfile: 
         json.dump(res, outfile)
 
-def get_forum_embeddings(): 
-    pass
-
 def main(): 
     if 'reddit' == args.dataset: 
-        get_reddit_embeddings()
+        get_embeddings()
     elif 'forum' == args.dataset: 
-        get_forum_embeddings() 
+        get_embeddings() 
     elif 'control' == args.dataset: 
-        get_reddit_embeddings()
+        get_embeddings()
 
 if __name__ == '__main__':
     main()

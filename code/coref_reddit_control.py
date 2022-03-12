@@ -71,7 +71,6 @@ def main():
                 writer.writerow([sr.lower()])
                 continue
 
-
             try:
                 # run the coref on text
                 doc = nlp(text)

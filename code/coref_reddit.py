@@ -20,6 +20,30 @@ COMMENTS = ROOT + 'data/comments/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 BOTS = LOGS + 'reddit_bots.txt'
 
+def write_out_clusters(sr, doc, writer): 
+    outstring = [sr.lower()]
+    for c in doc._.coref_clusters: # for coref cluster in doc
+        keep_cluster = False
+        for s in c.mentions: # for span in cluster
+            if s.text.lower() in words: # SCENARIO 2
+                keep_cluster = True
+                break
+            if s[0].dep_ in {'det','poss'}: # SCENARIO 1
+                new_s = s[1:]
+                if new_s.text.lower() in words:
+                    keep_cluster = True
+                    break
+        if keep_cluster:
+            curr_cluster = []
+            for s in c.mentions: # for span in cluster
+                entity = s.text.lower()
+                entity = entity.replace("\n", "")
+                entity = entity.replace("\r", "")
+                entity = entity.replace("\t", "")
+                curr_cluster.append(entity)
+            outstring.append("$".join(curr_cluster))
+    writer.writerow(outstring)
+
 def main():
     '''
     Output format: subreddit \t cluster1word1$cluster1word2 \t cluster2word1$cluster2word2$cluster2word3$cluster2word4 \n
@@ -42,7 +66,6 @@ def main():
     if pattern2 in words:
         words.remove(pattern2)
 
-
     # load coref
     nlp = spacy.load('en_core_web_sm')
     neuralcoref.add_to_pipe(nlp)
@@ -61,51 +84,19 @@ def main():
             d = json.loads(line)
             text = d['body']
             sr = d['subreddit']
-
             if not check_valid_comment(line):
                 writer.writerow([sr.lower()])
-                continue
-
-
+                continue 
             try:
                 # run the coref on text
                 doc = nlp(text)
-
             except MemoryError:
                 writer.writerow([sr.lower()])
                 error_outfile.write(line + '\n')
                 continue
-
-            else:
-                outstring = [sr.lower()]
-                for c in doc._.coref_clusters: # for coref cluster in doc
-                    keep_cluster = False
-                    for s in c.mentions: # for span in cluster
-                        if s.text.lower() in words: # SCENARIO 2
-                            keep_cluster = True
-                            break
-                        if s[0].dep_ in {'det','poss'}: # SCENARIO 1
-                            new_s = s[1:]
-                            if new_s.text.lower() in words:
-                                keep_cluster = True
-                                break
-                    if keep_cluster:
-                        curr_cluster = []
-                        for s in c.mentions: # for span in cluster
-                            entity = s.text.lower()
-                            entity = entity.replace("\n", "")
-                            entity = entity.replace("\r", "")
-                            entity = entity.replace("\t", "")
-                            curr_cluster.append(entity)
-                        outstring.append("$".join(curr_cluster))
-
-                writer.writerow(outstring)
-
-
-
-
-
-
+                
+            write_out_clusters(sr, doc, writer)    
+            
     if os.path.exists(POSTS + 'RS_' + month + '/part-00000'):
         post_path = POSTS + 'RS_' + month + '/part-00000'
     else:
@@ -115,47 +106,18 @@ def main():
             d = json.loads(line)
             text = d['selftext']
             sr = d['subreddit']
-
             if not check_valid_post(line):
-                outfile.write(sr.lower())
-                outfile.write("\n")
+                writer.writerow([sr.lower()])
                 continue
-
             try:
                 # run the coref on text
                 doc = nlp(text)
-
             except MemoryError:
+                writer.writerow([sr.lower()])
                 error_outfile.write(line + '\n')
                 continue
-
-            else:
-                outstring = ''
-                for c in doc._.coref_clusters: # for coref cluster in doc
-                    keep_cluster = False
-                    for s in c.mentions: # for span in cluster
-                        if s.text.lower() in words: # SCENARIO 2
-                            keep_cluster = True
-                            break
-                        if s[0].dep_ in {'det','poss'}: # SCENARIO 1
-                            new_s = s[1:]
-                            if new_s.text.lower() in words:
-                                keep_cluster = True
-                                break
-                    if keep_cluster:
-                        curr_cluster = []
-                        for s in c.mentions: # for span in cluster
-                            entity = s.text.lower()
-                            entity = entity.replace("\n", "")
-                            entity = entity.replace("\r", "")
-                            entity = entity.replace("\t", "")
-                            curr_cluster.append(entity)
-                        outstring += "$".join(curr_cluster) + "\t"
-
-                outfile.write(sr.lower() + "\t" + outstring)
-                outfile.write("\n")
-
-
+            
+            write_out_clusters(sr, doc, writer)
     outfile.close()
 
 def check_valid_comment(line):
