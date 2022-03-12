@@ -57,7 +57,7 @@ def get_subreddit_categories():
             categories_rev[row['Category after majority agreement']].append(name)
     return categories, categories_rev
 
-def create_reddit_df(dataset): 
+def create_coref_df(dataset): 
     # load vocabulary 
     words = load_vocabulary()
     pronoun_map = get_pronoun_map()
@@ -65,7 +65,7 @@ def create_reddit_df(dataset):
     
     d = defaultdict(list) # { (month, community, word) : [fem, masc, masc, fem, etc...] } 
     
-    error_file = open(COREF_FOLDER + 'reddit_errors.temp', 'w')
+    error_file = open(COREF_FOLDER + dataset + '_errors.temp', 'w')
     for filename in tqdm(os.listdir(COREF_FOLDER)):
         if not filename.startswith(dataset): continue
         year_month = filename.replace(dataset + '_', '')
@@ -142,7 +142,8 @@ def create_reddit_df(dataset):
     df.to_csv(COREF_FOLDER + 'coref_' + dataset + '_df.csv', index=False, header=True)
     
 def main(): 
-    create_reddit_df('CONTROL')
+    #create_coref_df('CONTROL')
+    create_coref_df('reddit')
 
 if __name__ == "__main__":
     main()

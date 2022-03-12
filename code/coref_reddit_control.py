@@ -102,8 +102,6 @@ def main():
                         outstring.append("$".join(curr_cluster))
 
                 writer.writerow(outstring)
-
-
     outfile.close()
 
 def check_valid_comment(line):
