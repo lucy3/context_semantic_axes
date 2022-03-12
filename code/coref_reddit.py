@@ -20,7 +20,7 @@ COMMENTS = ROOT + 'data/comments/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 BOTS = LOGS + 'reddit_bots.txt'
 
-def write_out_clusters(sr, doc, writer): 
+def write_out_clusters(sr, doc, writer, words): 
     outstring = [sr.lower()]
     for c in doc._.coref_clusters: # for coref cluster in doc
         keep_cluster = False
@@ -95,7 +95,7 @@ def main():
                 error_outfile.write(line + '\n')
                 continue
                 
-            write_out_clusters(sr, doc, writer)    
+            write_out_clusters(sr, doc, writer, words)    
             
     if os.path.exists(POSTS + 'RS_' + month + '/part-00000'):
         post_path = POSTS + 'RS_' + month + '/part-00000'
@@ -117,7 +117,7 @@ def main():
                 error_outfile.write(line + '\n')
                 continue
             
-            write_out_clusters(sr, doc, writer)
+            write_out_clusters(sr, doc, writer, words)
     outfile.close()
 
 def check_valid_comment(line):
