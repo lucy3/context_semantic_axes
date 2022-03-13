@@ -78,7 +78,10 @@ def create_coref_df(dataset):
                     line_num += 1
                     continue # no clusters
                 community = contents[0]
-                cat = categories[community]
+                if dataset == 'reddit': 
+                    cat = categories[community]
+                elif dataset == 'CONTROL': 
+                    cat = 'CONTROL'
                 if cat == 'Health' or cat == 'Criticism': 
                     line_num += 1
                     continue
@@ -142,7 +145,7 @@ def create_coref_df(dataset):
     df.to_csv(COREF_FOLDER + 'coref_' + dataset + '_df.csv', index=False, header=True)
     
 def main(): 
-    #create_coref_df('CONTROL')
+    create_coref_df('CONTROL')
     create_coref_df('reddit')
 
 if __name__ == "__main__":
