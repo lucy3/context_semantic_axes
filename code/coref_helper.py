@@ -12,6 +12,7 @@ from tqdm import tqdm
 import csv
 import os
 import pandas as pd
+import string
 
 def load_vocabulary(): 
     words = []
@@ -66,30 +67,37 @@ def create_coref_df(dataset):
     d = defaultdict(list) # { (month, community, word) : [fem, masc, masc, fem, etc...] } 
     
     error_file = open(COREF_FOLDER + dataset + '_errors.temp', 'w')
-    for filename in tqdm(os.listdir(COREF_FOLDER)):
-        if not filename.startswith(dataset): continue
-        year_month = filename.replace(dataset + '_', '')
-        year = year_month.split('-')[0]
+    for filename in tqdm(os.listdir(COREF_FOLDER + dataset.lower() + '/')):
+        if dataset == 'reddit' or dataset == 'CONTROL': 
+            year_month = filename.replace(dataset + '_', '')
+            year = year_month.split('-')[0]  
         line_num = 0
-        with open(COREF_FOLDER + filename, 'r') as infile: 
+        with open(COREF_FOLDER + dataset.lower() + '/' + filename, 'r') as infile: 
             reader = csv.reader(infile, delimiter='\t')
             for contents in reader: 
                 if len(contents) <= 1: 
                     line_num += 1
                     continue # no clusters
-                community = contents[0]
                 if dataset == 'reddit': 
+                    community = contents[0]
                     cat = categories[community]
                 elif dataset == 'CONTROL': 
                     cat = 'CONTROL'
+                elif dataset == 'forum':
+                    cat = filename
+                    date = contents[0]
+                    year = date.split('-')[0]
                 if cat == 'Health' or cat == 'Criticism': 
                     line_num += 1
                     continue
                 for clust in contents[1:]:
-                    clust = set(clust.lower().split('$'))
+                    # remove stray emoji and punctuation mark from error file
+                    clust = clust.lower().replace('‘', '').replace('💘', '')
+                    clust = set(clust.split('$'))
                     clust_vocab_terms = set()
                     pronouns = set()
                     for term in clust: 
+                        term = term.translate(str.maketrans('', '', string.punctuation))
                         # bigrams and unigrams with deteminers/posessives
                         w_tokens = term.split(' ')
                         if len(w_tokens) > 3: continue
@@ -117,6 +125,7 @@ def create_coref_df(dataset):
                         for pn in pronouns: 
                             d[(year, cat, k)].append(pn)
                 line_num += 1
+    error_file.close()
                             
     print("Creating dataframe...")
     dataframe_d = {'year': [],
@@ -145,8 +154,9 @@ def create_coref_df(dataset):
     df.to_csv(COREF_FOLDER + 'coref_' + dataset + '_df.csv', index=False, header=True)
     
 def main(): 
-    create_coref_df('CONTROL')
+    #create_coref_df('CONTROL')
     create_coref_df('reddit')
+    #create_coref_df('forum')
 
 if __name__ == "__main__":
     main()
