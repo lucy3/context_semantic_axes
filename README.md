@@ -1,11 +1,13 @@
 # A Diachronic Typology of People in the Manosphere and Related Online Communities
 
-# Dataset
+## Code
 
-# Vocabulary
+### Dataset
 
-# Building semantic axes
+### Vocabulary
 
-# Validating the axes 
+### Building semantic axes
 
-# Semantic differences and change 
+### Validating the axes 
+
+### Semantic differences and change 
