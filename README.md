@@ -23,3 +23,4 @@ Each script should be thoroughly commented.
 ### Deprecated
 Some scripts were written to experiment with things but they will not be included in the paper. 
 - `calc_npmi.py`: get embeddings using contexts with high NPMI 
+- `community_users.py`: create user-based network among ideologies (resulted in ugly network)
