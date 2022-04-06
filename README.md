@@ -11,3 +11,5 @@
 ### Validating the axes 
 
 ### Semantic differences and change 
+
+- `apply_semantics.py`: Apply axes to Reddit and forum embeddings 
