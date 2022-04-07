@@ -20,7 +20,7 @@ Each script should be thoroughly commented.
 - `find_people.py`: to create our vocab
 - `data_sampler.py`: sampling examples for NER evaluation
 - Some scripts from booknlp multilingual for running NER model on entire dataset 
-- `evaluate_ner.py: evaluate based on human-annotated data
+- `evaluate_ner.py`: evaluate based on human-annotated data
 - `lexical_change.py`: for creating time series of words 
 - `k_spectral_centroid.py`: for visualizing how words relate to waves of different communities 
 - `people_viz.ipynb`: for examining vocab
