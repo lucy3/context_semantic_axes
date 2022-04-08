@@ -1,3 +1,9 @@
+'''
+This script does the following: 
+- produce post and comment counts per month in jsons
+- produce unigram and bigram parquets for all three discussion datasets
+'''
+
 from transformers import BasicTokenizer
 import sys
 import json 
@@ -43,6 +49,9 @@ def get_num_comments():
     sc.stop()
     
 def get_num_posts(): 
+    '''
+    Get the number of posts per subreddit per month
+    '''
     sr_month = defaultdict(Counter)
     for filename in tqdm(os.listdir(SUBS)): 
         if filename == 'bad_jsons': continue
@@ -67,7 +76,7 @@ def get_n_gramlist(nngramlist, toks, sr, n=2):
 
 def get_ngrams_comment(line, tokenizer=None, per_comment=True): 
     '''
-    Reddit comment
+    Bigrams and unigrams in Reddit comment
     '''
     d = json.loads(line)
     sr = d['subreddit'].lower()
@@ -80,7 +89,7 @@ def get_ngrams_comment(line, tokenizer=None, per_comment=True):
 
 def get_ngrams_post(line, tokenizer=None, per_comment=True): 
     '''
-    Reddit post
+    Bigrams and unigrams in Reddit comment
     '''
     d = json.loads(line)
     all_grams = set()
@@ -93,6 +102,9 @@ def get_ngrams_post(line, tokenizer=None, per_comment=True):
     return all_grams
 
 def count_sr(per_comment=True): 
+    '''
+    Creates parquet for unigrams and bigrams in Reddit data 
+    '''
     bots = get_bot_set()
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
@@ -135,6 +147,7 @@ def count_sr(per_comment=True):
     
 def count_control(per_comment=True):
     '''
+    Creates parquet for unigrams and bigrams in Reddit control
     @inputs: 
     - per_comment: flag, where if False, counts all instances of a word 
     in a comment, otherwise if True, counts each word just once per comment
@@ -176,6 +189,9 @@ def count_control(per_comment=True):
     df.write.mode('overwrite').parquet(outpath)   
     
 def get_ngrams_comment_forum(line, tokenizer=None, per_comment=True): 
+    '''
+    Gets bigrams and unigrams for forum
+    '''
     d = json.loads(line)
     if d['date_post'] is None: 
         year = "None"
@@ -197,6 +213,8 @@ def count_forum(per_comment=True):
     We attach "FORUM_" the beginning of the community name
     to avoid incels the forum and incels the subreddit from clashing
     later when we combine dataframes. 
+    
+    Creates parquet for unigrams and bigrams in forums
     '''
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
@@ -223,9 +241,10 @@ def count_forum(per_comment=True):
 def main(): 
     count_control(per_comment=False)
     count_sr(per_comment=False)
+    count_forum(per_comment=False)
     count_control()
     count_sr()
-    #count_forum()
+    count_forum()
     sc.stop()
 
 if __name__ == "__main__":

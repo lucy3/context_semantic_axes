@@ -17,7 +17,7 @@ EMBED_PATH = LOGS + 'semantics_mano/embed/'
 
 def load_manosphere_vecs(): 
     '''
-    In the reddit dataset, the size of
+    In the reddit dataset alone, the size of
     full_reps is (257646, 3072)
     '''
     bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
@@ -36,6 +36,7 @@ def load_manosphere_vecs():
             standard_vec = (np.array(d[key]) - bert_mean) / bert_std
             full_reps.append(standard_vec)
             vocab_order.append(key)
+    # TODO: get forum reps as well 
     full_reps = np.array(full_reps)
     print("Number of reps", full_reps.shape)
     return full_reps, vocab_order
@@ -44,7 +45,6 @@ def quantify_axes_behavior():
     '''
     Finds the axes that showcase the most variance in how
     word biases are distributed. 
-    Instead of using 
     '''
     print("getting axes...")
     axes, axes_vocab = load_wordnet_axes()
@@ -79,6 +79,10 @@ def quantify_axes_behavior():
     print(variances.most_common(20))
     
 def examine_outliers(): 
+    '''
+    This writes the top and bottom words in axes
+    with the most variance. 
+    '''
     with open(LOGS + 'semantics_mano/results/scores.json', 'r') as infile: 
         scores = json.load(infile)
         

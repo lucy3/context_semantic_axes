@@ -3,10 +3,15 @@ from collections import defaultdict
 import json
 
 ROOT = '/mnt/data0/lucy/manosphere/'
+# glossary people
 PEOPLE_FILE = ROOT + 'data/people.csv'
+# entire vocab after NER 
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 
 def get_vocab(): 
+    '''
+    Gets vocab based on whether word should be kept or not in vocab spreadsheet.
+    '''
     words = []
     with open(ANN_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -16,9 +21,15 @@ def get_vocab():
     return words
 
 def valid_line(text): 
+    '''
+    Checks if text is valid or not
+    '''
     return text.strip() != '[removed]' and text.strip() != '[deleted]' and text.strip() != ''
 
 def get_sr_cats(): 
+    '''
+    Returns dictionary of {subreddit : category} 
+    '''
     categories = defaultdict(str)
     with open(ROOT + 'data/subreddits.txt', 'r') as infile: 
         reader = csv.DictReader(infile)
@@ -32,7 +43,9 @@ def get_sr_cats():
 
 def get_manual_people(): 
     """
-    get list of words, add plural forms
+    @output: 
+    - words: set of singular and plural glossary words
+    - sing2plural: { singular form : plural forum } 
     """
     words = set()
     sing2plural = {}
@@ -67,6 +80,9 @@ def check_valid_post(line):
     return 'selftext' in d
 
 def get_bot_set(): 
+    '''
+    Get set of bot usernames
+    '''
     bots = set()
     with open(ROOT + 'logs/reddit_bots.txt', 'r') as infile: 
         for line in infile: 
@@ -74,5 +90,8 @@ def get_bot_set():
     return bots
     
 def remove_bots(line, bot_set=set()): 
+    '''
+    Remove post if written by bots 
+    '''
     d = json.loads(line)
     return 'author' in d and d['author'] not in bot_set

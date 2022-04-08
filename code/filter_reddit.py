@@ -1,6 +1,6 @@
 """
-File for using Spark to organize the data,
-gather statistics about the dataset
+File for using Spark to filter out manosphere communities from
+entire Reddit dataset, sample control dataset, and detect bots. 
 
 Possible file extensions include
 - .bz2
@@ -82,18 +82,6 @@ def check_duplicate_months(d, months):
             print("DIFFERENCE", len(ids1 - ids2), len(ids2 - ids1))
         else: 
             print("IT IS FINE!!!!!!!!!!")
-            
-def get_language(line): 
-    #d = json.loads(line)
-    #if 'body' in d: # comment
-    #    text = d['body']
-    #elif 'selftext' in d and 'title' in d: # submission
-    #    text = d['title'] + '\n' + d['selftext']
-    text = line
-    lang = equilid.get_langs(text)
-    if len(lang) > 1: return u''
-    if len(lang) == 0: return u''
-    return lang[0]
 
 def get_dumb_lines(line): 
     try: 
@@ -331,6 +319,9 @@ def detect_bots():
             outfile.write(user + '\n')
 
 def main(): 
+    check_duplicates_main()
+    extract_subreddits_main()
+    sample_reddit_control()
     detect_bots()
     sc.stop()
 
