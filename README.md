@@ -13,7 +13,6 @@ Each script should be thoroughly commented.
 - `forum_helpers.py`: organize forum data 
 - `gram_counting.py`: count all unigrams and bigrams in dataset 
 - `count_viz.ipynb`: verifying that our dataset matches patterns from Ribeiro et al.
-- `explore_outliers.ipynb`: investigating a few long-post outliers in the dataset 
 
 ### Vocabulary
 
@@ -52,3 +51,4 @@ Some scripts were written to experiment with things but they will not be include
 - `calc_npmi.py`: get embeddings using contexts with high NPMI (top contexts did not make sense)
 - `community_users.py`: create user-based network among ideologies (resulted in ugly network)
 - `singular_plural_matching.py`: singular plural matching, unused
+- `explore_outliers.ipynb`: investigating a few long-post outliers in the dataset. This isn't needed because we are counting words once per comment/post
