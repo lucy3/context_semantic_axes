@@ -1,6 +1,8 @@
 """
 File for using Spark to organize the data,
-gather statistics about the dataset
+filter out manosphere communities from
+entire Reddit dataset, gather statistics about 
+the dataset, and detect bots. 
 
 Possible file extensions include
 - .bz2
