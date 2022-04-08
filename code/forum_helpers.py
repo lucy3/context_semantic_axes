@@ -1,3 +1,10 @@
+'''
+This script does the following: 
+- remove quoted text and duplicates from some forums
+that contain them
+- examines how many comments are in the new cleaned_forums dataset
+'''
+
 from sqlitedict import SqliteDict
 import os
 import datetime
@@ -151,7 +158,7 @@ def remove_duplicates():
         
 def check_anomaly(): 
     '''
-    What is the extremely large incels post?
+    What is the extremely large incels/mgtow post?
     '''
     weird_ones = ['incels', 'mgtow']
     for f in weird_ones: 
