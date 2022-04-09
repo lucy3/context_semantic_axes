@@ -12,7 +12,7 @@ from pyspark import SparkConf, SparkContext
 from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import Row, SQLContext
 from functools import partial
-from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set
+from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set, get_sr_cats
 import os
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
@@ -237,14 +237,46 @@ def count_forum(per_comment=True):
     else: 
         outpath = WORD_COUNT_DIR + 'forum_counts'
     df.write.mode('overwrite').parquet(outpath)
+    
+def get_total_tokens(): 
+    '''
+    Sum up unigrams for each dataset 
+    '''
+    outfile = open(WORD_COUNT_DIR + 'total_unigram_counts.txt', 'w')
+    categories = get_sr_cats()
+    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
+    leave_out = []
+    for sr in categories: 
+        if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
+            leave_out.append(sr)
+    reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
+    unigrams = reddit_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    # map to month : total
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('reddit_rel:' + str(um_totals) + '\n')
+    
+    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
+    unigrams = forum_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('forum_rel:' + str(um_totals) + '\n')
+    
+    control_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'control_counts')
+    unigrams = control_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('control:' + str(um_totals) + '\n')
+    outfile.close()
 
 def main(): 
-    count_control(per_comment=False)
-    count_sr(per_comment=False)
-    count_forum(per_comment=False)
-    count_control()
-    count_sr()
-    count_forum()
+#     count_control(per_comment=False)
+#     count_sr(per_comment=False)
+#     count_forum(per_comment=False)
+#     count_control()
+#     count_sr()
+#     count_forum()
+    get_total_tokens()
     sc.stop()
 
 if __name__ == "__main__":
