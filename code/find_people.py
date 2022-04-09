@@ -29,6 +29,12 @@ UD = LOGS + 'urban_dict.csv'
 WORD_COUNT_DIR = LOGS + 'gram_counts/'
 
 def get_manual_nonpeople(): 
+    '''
+    This is the list of words in community glossaries 
+    that are not labeled as people. 
+    
+    This function does not seem to be used anywhere. 
+    '''
     words = set()
     with open(NONPEOPLE_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -42,7 +48,7 @@ def get_manual_nonpeople():
 
 def calculate_ud_coverage(): 
     """
-    see how many common nouns for people turn up in urban dictionary
+    See how many common nouns for people turn up in urban dictionary.
     """
     people, sing2plural = get_manual_people()
     num_definitions = Counter()
