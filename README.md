@@ -16,7 +16,7 @@ Each script should be thoroughly commented.
 
 ### Vocabulary
 
-- `find_people.py`: to create our vocab
+- `find_people.py`: to read in NER output, inspect glossary words, and create spreadsheet for manual annotation 
 - `data_sampler.py`: sampling examples for NER evaluation
 - Some scripts from booknlp multilingual for running NER model on entire dataset 
 - `evaluate_ner.py`: evaluate based on human-annotated data
