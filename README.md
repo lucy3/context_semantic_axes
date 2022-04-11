@@ -20,9 +20,9 @@ Each script should be thoroughly commented.
 - `evaluate_ner.py`: evaluate based on human-annotated data
 - Some scripts from booknlp multilingual for running NER model on entire dataset 
 - `find_people.py`: to read in NER output, inspect glossary words, and create spreadsheet for manual annotation 
+- `people_viz.ipynb`: for examining vocab
 - `lexical_change.py`: for creating time series of words 
 - `k_spectral_centroid.py`: for visualizing how words relate to waves of different communities 
-- `people_viz.ipynb`: for examining vocab
 - `time_series_plots.ipynb`: for examining time series for vocab
 - `coref_forums.py`, `coref_reddit_control.py`, `coref_reddit.py`: : running coref on different forum/Reddit datasets
 - `coref_job_files.py`: creates job files for coref 
