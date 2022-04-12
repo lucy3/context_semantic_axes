@@ -24,7 +24,7 @@ Each script should be thoroughly commented.
 - `lexical_change.py`: for creating time series of words 
 - `k_spectral_centroid.py`: for visualizing how words relate to waves of different communities 
 - `time_series_plots.ipynb`: for examining time series for vocab
-- `coref_forums.py`, `coref_reddit_control.py`, `coref_reddit.py`: : running coref on different forum/Reddit datasets
+- `coref_forums.py`, `coref_reddit_control.py`, `coref_reddit.py`: running coref on different forum/Reddit datasets
 - `coref_job_files.py`: creates job files for coref 
 - `coref_helper.py`: analyzes coref output 
 - `coref_viz.ipynb`: figuring out gender inference steps
