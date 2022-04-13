@@ -32,8 +32,8 @@ Each script should be thoroughly commented.
 ### Building and validating semantic axes
 
 - `setup_semantics.py`: finds occupation pages and creates WordNet axes
-- `axis_substitutes.py`: getting BERT substitutes for adjectives in Wikipedia sentences.
-- `wikipedia_embeddings.py`: getting embeddings for wikipedia 
+- `wikipedia_embeddings.py`: getting adjective and occupation embeddings from wikipedia 
+- `axis_substitutes.py`: getting "good" contexts for adjectives in Wikipedia sentences.
 - `validate_semantics.py`: functions for applying axes on occupation dataset
 - `axes_occupation_viz.ipynb`: evaluate axes on occupation data
 
