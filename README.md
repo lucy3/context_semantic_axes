@@ -31,6 +31,7 @@ Each script should be thoroughly commented.
 
 ### Building semantic axes
 
+- `setup_semantics.py`: finds occupation pages and creates WordNet axes
 - `axis_substitutes.py`: getting BERT substitutes for adjectives in Wikipedia sentences.
 - `wikipedia_embeddings.py`: getting embeddings for wikipedia 
 
