@@ -29,15 +29,12 @@ Each script should be thoroughly commented.
 - `coref_helper.py`: analyzes coref output 
 - `coref_viz.ipynb`: figuring out gender inference steps
 
-### Building semantic axes
+### Building and validating semantic axes
 
 - `setup_semantics.py`: finds occupation pages and creates WordNet axes
 - `axis_substitutes.py`: getting BERT substitutes for adjectives in Wikipedia sentences.
 - `wikipedia_embeddings.py`: getting embeddings for wikipedia 
-
-### Validating the axes 
-
-- `validate_semantics.py`
+- `validate_semantics.py`: functions for applying axes on occupation dataset
 - `axes_occupation_viz.ipynb`: evaluate axes on occupation data
 
 ### Semantic differences and change 
