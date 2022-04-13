@@ -29,10 +29,9 @@ PEOPLE_FILE = ROOT + 'data/people.csv'
 def sample_reddit(): 
     '''
     For NER evaluation, k = 25
-    For coref evaluation, k = 10
     '''
     categories = get_sr_cats()
-    k = 10
+    k = 25
     samples = defaultdict(list) # {cat: [25 comments]}
     subreddit_count = Counter() # {cat: number of times seen}
     for f in os.listdir(COMMENTS):
@@ -84,9 +83,8 @@ def sample_reddit():
 def sample_forums(): 
     '''
     For NER evaluation, k = 25
-    For coref evaluation, k = 10
     '''
-    k = 10
+    k = 25
     samples = defaultdict(list)
     forum_count = Counter()
     for f in os.listdir(FORUMS):
@@ -114,6 +112,9 @@ def sample_by_glossword():
     '''
     Get 2 sentences per glossary word
     For words with both singular and plural forms
+    
+    We do not use this because it produces too many examples
+    for human to go through. 
     '''
     all_words, _ = get_manual_people()
     categories = get_sr_cats()
@@ -200,7 +201,6 @@ def sample_by_glossword():
 def main(): 
     sample_reddit()
     sample_forums()
-    #sample_by_glossword()
 
 if __name__ == '__main__':
     main()

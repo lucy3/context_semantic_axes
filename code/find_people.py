@@ -195,7 +195,7 @@ def get_significant_entities():
     '''
     Our filter for "significant entities"
     is the word needs to be popular (occur at least 500 times
-    in reddit_rel and forum_rel), and at least half of its
+    in reddit_rel and forum_rel), and at least 20% of its
     instances in the dataset should be tagged by the NER model
     as a person to avoid ambiguity. 
     '''
@@ -226,7 +226,7 @@ def get_significant_entities():
         # the word needs to be popular
         if all_counts[gram] < 500: continue
         tagged_total = sum(tagged_counts[gram].values())
-        # at least half of its instances should be people to avoid ambiguity
+        # at least 20% of its instances should be people to avoid ambiguity
         if tagged_total < (all_counts[gram] / 5): continue
         gram_len = len(gram.split(' '))
         assert gram_len < 3 and gram_len > 0

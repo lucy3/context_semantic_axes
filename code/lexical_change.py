@@ -56,11 +56,9 @@ def month_year_iter(start, end):
 
 def get_time_series(word, df, um_totals, bm_totals): 
     '''
-    Gets normalized and log transformed
-    frequencies for each word. 
+    Gets normalized frequencies for each word. 
     Normalized means it is word count in month / total words in month
     For bigrams, it's bigram count in month / total bigrams in month
-    Log transformed is log10. 
     
     - word: word to get time series for
     - df: dataframe containing word counts
@@ -83,8 +81,6 @@ def get_time_series(word, df, um_totals, bm_totals):
     min_month = '2005-11'
     max_month = '2019-12'
 
-    # trim zeros off start and end 
-    # add smoothing to avoid zero counts
     ts = []
     
     for m in month_year_iter(min_month, max_month): 
@@ -237,7 +233,7 @@ def calc_frequency_per_cat_year():
     over time in reddit and forum datasets. 
     
     @input: combined_counts_set for reddit + forum
-    @output: nested dictionary of { cat_year { term : count } }
+    @output: nested dictionary of { cat_year: { term : count } }
     '''
     conf = SparkConf()
     sc = SparkContext(conf=conf)
