@@ -154,7 +154,7 @@ def get_glove_vecs(vocab, axes_vocab, exp_name):
                     if 'zscore' in exp_name: 
                         vec = (vec - glove_mean) / glove_std
                     rep.append(vec)
-            if len(rep) != 2: continue
+            assert len(rep) == 2
             rep = np.mean(np.array(rep), axis=0)
             glove_vecs[w] = rep
     return glove_vecs
@@ -477,6 +477,7 @@ def loo_val_nonagg(in_folder, axes, exp_name):
         word_rep_keys = json.load(infile)
     with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
         for pole in tqdm(sorted(axes.keys())): 
+            if pole != 'intensifying.a.01': continue
             left = axes[pole][0] # list of words
             left_pole = pole + '_left'
             left_vec, lrep_keys_map = get_vecs_and_map(in_folder, left, left_pole, \
@@ -544,8 +545,9 @@ def main():
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
-    save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
-    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', calc_effect=False, exp_name='default')
+    #save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+    #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
 
 if __name__ == '__main__':
     main()
