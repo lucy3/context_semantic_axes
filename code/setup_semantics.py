@@ -225,9 +225,28 @@ def retrieve_wordnet_axes():
                 seen.add(synonyms)
                 seen.add(antonyms)
                 
+def axes_stats(): 
+    '''
+    Outputs # of axes, and average # of adj per pole. 
+    '''
+    num_adj = []
+    num_axes = 0
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            num_axes += 1
+            contents = line.strip().split('\t')
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            num_adj.append(len(axis1))
+            axis2 = contents[2].split(',')
+            num_adj.append(len(axis2))
+    print("avg # of adj per pole:", np.mean(num_adj))
+    print("# of axes:", num_axes)
+                
 def main():
-    prep_datasets()
-    retrieve_wordnet_axes()
+    #prep_datasets()
+    #retrieve_wordnet_axes()
+    axes_stats()
     
 if __name__ == '__main__':
     main()

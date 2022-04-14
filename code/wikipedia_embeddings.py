@@ -1,5 +1,18 @@
 """
-For getting BERT embeddings of key words from wikipedia
+For getting BERT embeddings of key words (occupations
+and adjectives) from Wikipedia. 
+
+Adjectives: 
+- sample_wikipedia() gets a sample of sentences 
+  containing adjectives 
+- get_axes_contexts() to get contexts for BERT-default
+- get_adj_embeddings() based on different subsets of contexts
+
+Occupations: 
+- get_occupation_embeddings()
+
+BERT mean and std
+- get_bert_mean_std()
 """
 import requests
 import json
@@ -22,9 +35,15 @@ LOGS = ROOT + 'logs/'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# --------------
+# Adjective functions
+# --------------
+
 def get_adj(): 
     '''
-    Read in adjectives
+    Read in adjectives in WordNet axes 
+    @input: 
+    - wordnet_axes.txt, or output of setup_semantics.py
     '''
     axes_vocab = set()
     with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
@@ -37,85 +56,25 @@ def get_adj():
             axes_vocab.update(axis1)
             axes_vocab.update(axis2)
     return axes_vocab
-    
-def get_occupation_embeddings(): 
-    '''
-    For each stretch of wikitext, get BERT embeddings
-    of occupation words
-    '''
-    with open(DATA + 'semantics/occupation_sents.json', 'r') as infile: 
-        occ_sents = json.load(infile) 
-        
-    print("Batching data...")
-    batch_size = 8
-    batch_sentences = [] # each item is a list
-    batch_words = [] # each item is a list
-    curr_batch = []
-    curr_words = []
-    btokenizer = BasicTokenizer(do_lower_case=True)
-    for occ in occ_sents: 
-        for text in occ_sents[occ]: 
-            tokens = btokenizer.tokenize(text)
-            curr_batch.append(tokens)
-            # take care of bigrams 
-            curr_word_tokens = btokenizer.tokenize(occ)
-            # TODO: fix this using a sliding window of size len(curr_word_tokens) over tokens
-            # TODO: where if the current window == curr_word_tokens, add those word_ids to curr_words
-            curr_words.append(curr_word_tokens)
-            if len(curr_batch) == batch_size: 
-                batch_sentences.append(curr_batch)
-                batch_words.append(curr_words)
-                curr_batch = []
-                curr_words = []
-    if len(curr_batch) != 0: # fence post
-        batch_sentences.append(curr_batch)
-        batch_words.append(curr_words)
 
-    print("Getting model...")
-    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
-    model = BertModel.from_pretrained('bert-base-uncased')
-    layers = [-4, -3, -2, -1] # last four layers
-    model.to(device)
-    model.eval()
+def get_content_lines(line): 
+    '''
+    There are a lot of if statements here
+    because I want to return False as fast as possible. 
+    '''
+    # only get wikitext content
+    line = line.strip()
+    if len(line) < 10:
+        return False
+    line_content = line.startswith('<doc') or line.startswith('</doc')
+    if line_content: 
+        return False
+    return True
     
-    word_reps = {}
-    for occ in occ_sents: 
-        occ = ' '.join(btokenizer.tokenize(occ))
-        word_reps[occ] = np.zeros(3072)
-    word_counts = Counter()
-    
-    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
-        word_tokenids = {} # { j : { word : [token ids] } }
-        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
-             return_tensors="pt")
-        encoded_inputs.to(device)
-        outputs = model(**encoded_inputs, output_hidden_states=True)
-        states = outputs.hidden_states # tuple
-        # batch_size x seq_len x 3072
-        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
-        for j in range(len(batch)): # for every example
-            word_ids = encoded_inputs.word_ids(j)
-            word_tokenids = []
-            for k, word_id in enumerate(word_ids): # for every token
-                if word_id is not None: 
-                    curr_word = batch[j][word_id]
-                    if curr_word in batch_words[i][j]: 
-                        word_tokenids.append(k)
-            token_ids_word = np.array(word_tokenids) 
-            word_embed = vector[j][token_ids_word]
-            word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
-            if np.isnan(word_embed).any(): 
-                print("PROBLEM!!!", word, batch[j])
-                return 
-            occ = ' '.join(batch_words[i][j])
-            word_reps[occ] += word_embed
-            word_counts[occ] += 1
-    
-    res = {}
-    for w in word_counts: 
-        res[w] = list(word_reps[w] / word_counts[w])
-    with open(LOGS + 'semantics_val/occupations_BERT.json', 'w') as outfile: 
-        json.dump(res, outfile)
+def get_sentences(line): 
+    # used by sample_wikipedia()
+    sents = tokenize.sent_tokenize(line.strip())
+    return sents
 
 def contains_vocab(tup, tokenizer=None, vocab=set()): 
     '''
@@ -136,39 +95,24 @@ def contains_vocab(tup, tokenizer=None, vocab=set()):
         ret.append((w, line_id))
     return ret
 
-def get_content_lines(line): 
-    '''
-    There are a lot of if statements here
-    because I want to return False as fast as possible. 
-    '''
-    # only get wikitext content
-    line = line.strip()
-    if len(line) < 10:
-        return False
-    line_content = line.startswith('<doc') or line.startswith('</doc')
-    if line_content: 
-        return False
-    return True
-
 def exact_sample(tup): 
+    # used by sample_wikipedia()
     w = tup[0]
     occur = tup[1]
     if len(occur) < 1000: 
         return tup
     else: 
         return (tup[0], random.sample(occur, 1000))
-    
-def get_sentences(line): 
-    sents = tokenize.sent_tokenize(line.strip())
-    return sents
             
-def sample_wikipedia(vocab, vocab_name): 
+def sample_wikipedia(): 
     '''
     Finds occurrences of vocab words in wikipedia. 
     
     Note: the adjectives in "adj_lines.json" have "xqxq"
     instead of "-" to account for dashed words for tokenization. 
     '''
+    vocab = get_adj()
+    vocab_name = 'adj'
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
@@ -200,25 +144,80 @@ def sample_wikipedia(vocab, vocab_name):
     data.coalesce(1).saveAsTextFile(LOGS + 'wikipedia/' + vocab_name + '_data')
     sc.stop()
     
-def count_vocab_words(line, tokenizer=None, vocab=set()): 
+def count_axes(): 
     '''
-    This is deprecated. 
+    This counts the number of sentences
+    we got from Wikipedia that could possibly be used
+    to represent each pole. 
     '''
-    # more conservative cutoff in search to account for wordpieces
-    tokens = tokenizer.tokenize(line)
-    counts = Counter(tokens)
-    wspace_tokens = line.lower().split()
-    wspace_counts = Counter(wspace_tokens)
-    ret = []
-    for w in wspace_counts: 
-        # because bert tokenizer splits words with '-'
-        if '-' in w and w in vocab: 
-            ret.append((w, wspace_counts[w]))    
-    for w in counts: 
-        if w in vocab: 
-            ret.append((w, counts[w]))
-    return ret
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+        adj_lines = json.load(infile)
+    total_count = Counter()
+    for adj in adj_lines: 
+        total_count[adj] = len(adj_lines[adj])
+        
+    synset_counts = Counter()
+    min_count = float("inf")
+    max_count = 0
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t')
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            axis1_count = sum([total_count[w] for w in axis1])
+            axis2 = contents[2].split(',')
+            axis2_count = sum([total_count[w] for w in axis2])
+            synset_counts[synset] = [axis1_count, axis2_count]
+            min_count = min([axis1_count, axis2_count, min_count])
+            max_count = max([axis1_count, axis2_count, max_count])
+            
+    print(min_count, max_count)
+            
+    with open(LOGS + 'wikipedia/axes_counts.json', 'w') as outfile: 
+        json.dump(synset_counts, outfile)
     
+def sample_random_contexts(ss, axis, adj_lines): 
+    '''
+    Adj that have '-' in adj_lines are replaced
+    with xqxq so in order to match them to the adj
+    in wordnet_axes, we need to replace and then compare.
+    '''
+    axis_lines = set()
+    for adj in axis:
+        a = adj.replace('-', 'xqxq') 
+        for line in adj_lines[a]: 
+            axis_lines.add((ss, adj, line))
+    axis_lines = random.sample(axis_lines, 100)
+    return axis_lines
+
+def get_axes_contexts(): 
+    '''
+    This function gets random contexts of each adjective. 
+    Inputs: 
+        - adj_lines.json: adjectives to lines in wikipedia
+        - wordnet_axes.txt: axes to adjectives
+    Output: 
+        - a dictionary from line number to adj in line
+    '''
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+        adj_lines = json.load(infile)
+    
+    ret = defaultdict(list) # {line_num: [(adj, synset)]}
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t') 
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            axis1_lines = sample_random_contexts(synset + '_left', axis1, adj_lines)
+            for tup in axis1_lines: 
+                ret[tup[2]].append([tup[1], tup[0]])
+            axis2 = contents[2].split(',')
+            axis2_lines = sample_random_contexts(synset + '_right', axis2, adj_lines)
+            for tup in axis2_lines: 
+                ret[tup[2]].append([tup[1], tup[0]])
+    with open(LOGS + 'wikipedia/adj_lines_random.json', 'w') as outfile: 
+        json.dump(ret, outfile) 
+        
 def batch_adj_data(input_json, exp_name): 
     '''
     Batches data for get_adj_embeddings()
@@ -377,6 +376,89 @@ def get_adj_embeddings(exp_name, save_agg=True):
         with open(out_folder + 'word_rep_key.json', 'w') as outfile: 
             json.dump(word_rep_keys, outfile)
         
+# --------------
+# Occupation functions
+# --------------
+    
+def get_occupation_embeddings(): 
+    '''
+    For each stretch of wikitext, get BERT embeddings
+    of occupation words
+    '''
+    with open(DATA + 'semantics/occupation_sents.json', 'r') as infile: 
+        occ_sents = json.load(infile) 
+        
+    print("Batching data...")
+    batch_size = 8
+    batch_sentences = [] # each item is a list
+    batch_words = [] # each item is a list
+    curr_batch = []
+    curr_words = []
+    btokenizer = BasicTokenizer(do_lower_case=True)
+    for occ in occ_sents: 
+        for text in occ_sents[occ]: 
+            tokens = btokenizer.tokenize(text)
+            curr_batch.append(tokens)
+            # take care of bigrams 
+            curr_word_tokens = btokenizer.tokenize(occ)
+            # TODO: fix this using a sliding window of size len(curr_word_tokens) over tokens
+            # TODO: where if the current window == curr_word_tokens, add those word_ids to curr_words
+            curr_words.append(curr_word_tokens)
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                batch_words.append(curr_words)
+                curr_batch = []
+                curr_words = []
+    if len(curr_batch) != 0: # fence post
+        batch_sentences.append(curr_batch)
+        batch_words.append(curr_words)
+
+    print("Getting model...")
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.to(device)
+    model.eval()
+    
+    word_reps = {}
+    for occ in occ_sents: 
+        occ = ' '.join(btokenizer.tokenize(occ))
+        word_reps[occ] = np.zeros(3072)
+    word_counts = Counter()
+    
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        word_tokenids = {} # { j : { word : [token ids] } }
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = []
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word in batch_words[i][j]: 
+                        word_tokenids.append(k)
+            token_ids_word = np.array(word_tokenids) 
+            word_embed = vector[j][token_ids_word]
+            word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
+            if np.isnan(word_embed).any(): 
+                print("PROBLEM!!!", word, batch[j])
+                return 
+            occ = ' '.join(batch_words[i][j])
+            word_reps[occ] += word_embed
+            word_counts[occ] += 1
+    
+    res = {}
+    for w in word_counts: 
+        res[w] = list(word_reps[w] / word_counts[w])
+    with open(LOGS + 'semantics_val/occupations_BERT.json', 'w') as outfile: 
+        json.dump(res, outfile)
+        
 def get_bert_mean_std(): 
     '''
     Get a mean and standard deviation vector
@@ -446,81 +528,8 @@ def get_bert_mean_std():
     np.save(LOGS + 'wikipedia/mean_BERT.npy', mean_word_rep)
     np.save(LOGS + 'wikipedia/std_BERT.npy', std_word_rep)
 
-def count_axes(): 
-    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
-        adj_lines = json.load(infile)
-    total_count = Counter()
-    for adj in adj_lines: 
-        total_count[adj] = len(adj_lines[adj])
-        
-    synset_counts = Counter()
-    min_count = float("inf")
-    max_count = 0
-    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
-        for line in infile: 
-            contents = line.strip().split('\t')
-            if len(contents) < 3: continue # no antonyms
-            synset = contents[0]
-            axis1 = contents[1].split(',')
-            axis1_count = sum([total_count[w] for w in axis1])
-            axis2 = contents[2].split(',')
-            axis2_count = sum([total_count[w] for w in axis2])
-            synset_counts[synset] = [axis1_count, axis2_count]
-            min_count = min([axis1_count, axis2_count, min_count])
-            max_count = max([axis1_count, axis2_count, max_count])
-            
-    print(min_count, max_count)
-            
-    with open(LOGS + 'wikipedia/axes_counts.json', 'w') as outfile: 
-        json.dump(synset_counts, outfile)
-
-def sample_random_contexts(ss, axis, adj_lines): 
-    '''
-    Adj that have '-' in adj_lines are replaced
-    with xqxq so in order to match them to the adj
-    in wordnet_axes, we need to replace and then compare.
-    '''
-    axis_lines = set()
-    for adj in axis:
-        a = adj.replace('-', 'xqxq') 
-        for line in adj_lines[a]: 
-            axis_lines.add((ss, adj, line))
-    axis_lines = random.sample(axis_lines, 100)
-    return axis_lines
-
-def get_axes_contexts(): 
-    '''
-    This function gets random contexts of each adjective. 
-    Inputs: 
-        - adj_lines.json: adjectives to lines in wikipedia
-        - wordnet_axes.txt: axes to adjectives
-    Output: 
-        - a dictionary from line number to adj in line
-    '''
-    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
-        adj_lines = json.load(infile)
-    
-    ret = defaultdict(list) # {line_num: [(adj, synset)]}
-    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
-        for line in infile: 
-            contents = line.strip().split('\t') 
-            if len(contents) < 3: continue # no antonyms
-            synset = contents[0]
-            axis1 = contents[1].split(',')
-            axis1_lines = sample_random_contexts(synset + '_left', axis1, adj_lines)
-            for tup in axis1_lines: 
-                ret[tup[2]].append([tup[1], tup[0]])
-            axis2 = contents[2].split(',')
-            axis2_lines = sample_random_contexts(synset + '_right', axis2, adj_lines)
-            for tup in axis2_lines: 
-                ret[tup[2]].append([tup[1], tup[0]])
-    with open(LOGS + 'wikipedia/adj_lines_random.json', 'w') as outfile: 
-        json.dump(ret, outfile) 
-
 def main(): 
-    get_occupation_embeddings()
-    #vocab = get_adj()
-    #sample_wikipedia(vocab, 'adj')
+    #sample_wikipedia()
     #get_axes_contexts()
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
@@ -528,6 +537,7 @@ def main():
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
+    get_occupation_embeddings()
 
 if __name__ == '__main__':
     main()
