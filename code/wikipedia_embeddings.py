@@ -381,12 +381,12 @@ def get_adj_embeddings(exp_name, save_agg=True):
 # Occupation functions
 # --------------
     
-def get_occupation_embeddings(): 
+def get_occupation_embeddings(occ_sents_path, outpath, find_person=False): 
     '''
     For each stretch of wikitext, get BERT embeddings
     of occupation words
     '''
-    with open(DATA + 'semantics/occupation_sents.json', 'r') as infile: 
+    with open(occ_sents_path, 'r') as infile: 
         occ_sents = json.load(infile) 
         
     print("Batching data...")
@@ -405,12 +405,18 @@ def get_occupation_embeddings():
             # take care of bigrams 
             curr_word_tokens = btokenizer.tokenize(occ)
             word_ids = []
-            temp_str = ' '.join(curr_word_tokens)
-            # sliding window of size curr_word_tokens over tokens
-            for i in range(len(tokens) - len(curr_word_tokens) + 1): 
-                window = tokens[i:i+len(curr_word_tokens)]
-                if ' '.join(window) == temp_str:
-                    word_ids.extend(range(i, i+len(curr_word_tokens)))
+            if find_person: 
+                for i in range(len(tokens)): 
+                    if tokens[i] == 'person': 
+                        word_ids.append(i)
+            else: 
+                temp_str = ' '.join(curr_word_tokens)
+                # sliding window of size curr_word_tokens over tokens
+                for i in range(len(tokens) - len(curr_word_tokens) + 1): 
+                    window = tokens[i:i+len(curr_word_tokens)]
+                    if ' '.join(window) == temp_str:
+                        word_ids.extend(range(i, i+len(curr_word_tokens)))
+            assert len(word_ids) != 0
             curr_idx.append(word_ids)
             curr_words.append(occ)
             if len(curr_batch) == batch_size: 
@@ -465,7 +471,7 @@ def get_occupation_embeddings():
     res = {}
     for w in word_counts: 
         res[w] = list(word_reps[w] / word_counts[w])
-    with open(LOGS + 'semantics_val/occupations_BERT.json', 'w') as outfile: 
+    with open(outpath, 'w') as outfile: 
         json.dump(res, outfile)
         
 def get_bert_mean_std(): 
@@ -546,7 +552,9 @@ def main():
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
-    get_occupation_embeddings()
+    #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
+    get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
+                              LOGS + 'semantics_val/person_BERT.json', find_person=True)
 
 if __name__ == '__main__':
     main()

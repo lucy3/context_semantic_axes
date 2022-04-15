@@ -3,6 +3,8 @@ This script does the following:
 - prep_datasets() calls functions for gathering
   Wikipedia pages that contain occupations 
 - retrieve_wordnet_axes() creates WordNet axes
+- prep_person_exp() creates input for seeing if the embedding for
+'person' changes across contexts 
 '''
 from collections import defaultdict
 import json
@@ -242,11 +244,25 @@ def axes_stats():
             num_adj.append(len(axis2))
     print("avg # of adj per pole:", np.mean(num_adj))
     print("# of axes:", num_axes)
+    
+def prep_person_exp(): 
+    with open(DATA + 'semantics/occupation_sents.json', 'r') as infile: 
+        occ_sents = json.load(infile) 
+        
+    new_occ_sents = defaultdict(list)
+    for occ in occ_sents: 
+        for sent in occ_sents[occ]: 
+            new_sent = re.sub(r'\b' + occ + r'\b', 'person', sent)
+            new_occ_sents[occ].append(new_sent)
+            
+    with open(DATA + 'semantics/person_occupation_sents.json', 'w') as outfile: 
+        json.dump(new_occ_sents, outfile)
                 
 def main():
     #prep_datasets()
     #retrieve_wordnet_axes()
-    axes_stats()
+    #axes_stats()
+    prep_person_exp()
     
 if __name__ == '__main__':
     main()
