@@ -214,7 +214,7 @@ def load_inputs(file_path, lexicon_name):
 
 def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False): 
     '''
-    TODO: unsure why I concatenate and then slice this_adj_matrix
+    comment
     '''
     N = 1000 # number of bootstrap samples
     biases = defaultdict(dict) # {c : { pole : (bias_sep, effect, bias1, bias2) } }
@@ -224,10 +224,7 @@ def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False
         
         for pole in adj_poles: 
             left_vecs, right_vecs = adj_poles[pole]
-            this_adj_matrix = np.concatenate((left_vecs, right_vecs), axis=0)
             this_word_matrix = word_matrix
-            left_vecs = this_adj_matrix[:left_vecs.shape[0], :]
-            right_vecs = this_adj_matrix[left_vecs.shape[0]:, :]
                 
             microframe = left_vecs.mean(axis=0) - right_vecs.mean(axis=0)
             c_w_f = cosine_similarity(this_word_matrix, microframe.reshape(1, -1))
@@ -477,7 +474,6 @@ def loo_val_nonagg(in_folder, axes, exp_name):
         word_rep_keys = json.load(infile)
     with open(LOGS + 'semantics_val/axes_quality_' + exp_name + '.txt', 'w') as outfile: 
         for pole in tqdm(sorted(axes.keys())): 
-            if pole != 'intensifying.a.01': continue
             left = axes[pole][0] # list of words
             left_pole = pole + '_left'
             left_vec, lrep_keys_map = get_vecs_and_map(in_folder, left, left_pole, \
@@ -544,8 +540,8 @@ def main():
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
-    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', calc_effect=False, exp_name='default')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
+#     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', calc_effect=False, exp_name='default')
     #save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
     #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
 

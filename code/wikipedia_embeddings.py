@@ -401,9 +401,14 @@ def get_occupation_embeddings():
             curr_batch.append(tokens)
             # take care of bigrams 
             curr_word_tokens = btokenizer.tokenize(occ)
-            # TODO: fix this using a sliding window of size len(curr_word_tokens) over tokens
-            # TODO: where if the current window == curr_word_tokens, add those word_ids to curr_words
-            curr_words.append(curr_word_tokens)
+            word_ids = []
+            temp_str = ' '.join(curr_word_tokens)
+            # sliding window of size curr_word_tokens over tokens
+            for i in range(len(tokens) - len(curr_word_tokens)): 
+                window = tokens[i:i+len(curr_word_tokens)]
+                if ' '.join(window) == temp_str:
+                    word_ids.extend(range(i, i+len(curr_word_tokens)))
+            curr_words.append(word_ids)
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
                 batch_words.append(curr_words)
@@ -439,10 +444,8 @@ def get_occupation_embeddings():
             word_ids = encoded_inputs.word_ids(j)
             word_tokenids = []
             for k, word_id in enumerate(word_ids): # for every token
-                if word_id is not None: 
-                    curr_word = batch[j][word_id]
-                    if curr_word in batch_words[i][j]: 
-                        word_tokenids.append(k)
+                if word_id is not None and word_id in batch_words[i][j]:
+                    word_tokenids.append(k)
             token_ids_word = np.array(word_tokenids) 
             word_embed = vector[j][token_ids_word]
             word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
