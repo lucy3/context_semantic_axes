@@ -392,9 +392,11 @@ def get_occupation_embeddings():
     print("Batching data...")
     batch_size = 8
     batch_sentences = [] # each item is a list
-    batch_words = [] # each item is a list
+    batch_idx = [] # each item is a list
+    batch_words = []
     curr_batch = []
     curr_words = []
+    curr_idx = []
     btokenizer = BasicTokenizer(do_lower_case=True)
     for occ in occ_sents: 
         for text in occ_sents[occ]: 
@@ -409,15 +411,19 @@ def get_occupation_embeddings():
                 window = tokens[i:i+len(curr_word_tokens)]
                 if ' '.join(window) == temp_str:
                     word_ids.extend(range(i, i+len(curr_word_tokens)))
-            curr_words.append(word_ids)
+            curr_idx.append(word_ids)
+            curr_words.append(occ)
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
                 batch_words.append(curr_words)
+                batch_idx.append(curr_idx)
                 curr_batch = []
                 curr_words = []
+                curr_idx = []
     if len(curr_batch) != 0: # fence post
         batch_sentences.append(curr_batch)
         batch_words.append(curr_words)
+        batch_idx.append(curr_idx)
 
     print("Getting model...")
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
@@ -445,7 +451,7 @@ def get_occupation_embeddings():
             word_ids = encoded_inputs.word_ids(j)
             word_tokenids = []
             for k, word_id in enumerate(word_ids): # for every token
-                if word_id is not None and word_id in batch_words[i][j]:
+                if word_id is not None and word_id in batch_idx[i][j]:
                     word_tokenids.append(k)
             token_ids_word = np.array(word_tokenids) 
             word_embed = vector[j][token_ids_word]
@@ -453,7 +459,7 @@ def get_occupation_embeddings():
             if np.isnan(word_embed).any(): 
                 print("PROBLEM!!!", word, batch[j])
                 return 
-            occ = ' '.join(batch_words[i][j])
+            occ = batch_words[i][j]
             word_reps[occ] += word_embed
             word_counts[occ] += 1
     
