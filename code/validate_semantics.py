@@ -538,11 +538,16 @@ def main():
 #     inspect_axes('bert-base-sub-zscore')
 #     inspect_axes('bert-base-prob')
 #     inspect_axes('bert-base-prob-zscore')
-    # ------ BERT ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
+#     # ------ BERT OCCUPATIONS ------
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
+    # ------ BERT PERSON ------
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-default')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-zscore')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob-zscore')
     # ------ GLOVE -------
     #save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
     #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
