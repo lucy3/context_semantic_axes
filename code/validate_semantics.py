@@ -21,7 +21,8 @@ import os
 import re
 from nltk import tokenize
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 GLOVE = DATA + 'glove/'
 LOGS = ROOT + 'logs/'
