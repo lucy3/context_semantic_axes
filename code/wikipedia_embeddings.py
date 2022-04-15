@@ -455,10 +455,10 @@ def get_occupation_embeddings():
             token_ids_word = np.array(word_tokenids) 
             word_embed = vector[j][token_ids_word]
             word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
-            if np.isnan(word_embed).any(): 
-                print("PROBLEM!!!", word, batch[j])
-                return 
             occ = batch_words[i][j]
+            if np.isnan(word_embed).any(): 
+                print("PROBLEM!!!", occ, batch[j])
+                return 
             word_reps[occ] += word_embed
             word_counts[occ] += 1
     
