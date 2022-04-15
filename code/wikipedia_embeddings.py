@@ -29,7 +29,8 @@ import numpy as np
 import os
 import copy
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
