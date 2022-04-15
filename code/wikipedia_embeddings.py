@@ -434,7 +434,6 @@ def get_occupation_embeddings():
     
     word_reps = {}
     for occ in occ_sents: 
-        occ = ' '.join(btokenizer.tokenize(occ))
         word_reps[occ] = np.zeros(3072)
     word_counts = Counter()
     
