@@ -407,7 +407,7 @@ def get_occupation_embeddings():
             word_ids = []
             temp_str = ' '.join(curr_word_tokens)
             # sliding window of size curr_word_tokens over tokens
-            for i in range(len(tokens) - len(curr_word_tokens)): 
+            for i in range(len(tokens) - len(curr_word_tokens) + 1): 
                 window = tokens[i:i+len(curr_word_tokens)]
                 if ' '.join(window) == temp_str:
                     word_ids.extend(range(i, i+len(curr_word_tokens)))
@@ -457,7 +457,7 @@ def get_occupation_embeddings():
             word_embed = word_embed.mean(dim=0).cpu().detach().numpy() # average word pieces
             occ = batch_words[i][j]
             if np.isnan(word_embed).any(): 
-                print("PROBLEM!!!", occ, batch[j])
+                print("PROBLEM!!!", occ, batch[j], batch_idx[i][j])
                 return 
             word_reps[occ] += word_embed
             word_counts[occ] += 1
