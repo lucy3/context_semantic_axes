@@ -487,7 +487,7 @@ def check_separability(exp_name):
 def consistency_helper(pole, left_vec, right_vec, outfile): 
     left_var = np.mean(np.var(left_vec, axis=0))
     outfile.write(pole + '\t' + str(left_var) + '\tleft\n')
-    right_var = np.mean(np.var(left_vec, axis=0))
+    right_var = np.mean(np.var(right_vec, axis=0))
     outfile.write(pole + '\t' + str(right_var) + '\tright\n')
     min_examples = min(left_vec.shape[0], right_vec.shape[0])
     if min_examples < left_vec.shape[0]: 
