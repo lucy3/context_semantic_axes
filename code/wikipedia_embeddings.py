@@ -588,7 +588,8 @@ def get_bert_mean_std():
             word_ids = np.array(encoded_inputs.word_ids(j))
             word_choice = np.random.choice(word_ids, 1)[0]
             word_tokenids = np.argwhere(word_ids == word_choice)
-            word_embed = vector[j][word_tokenids].mean(dim=0).cpu().detach().numpy()
+            word_embed = vector[j][word_tokenids]
+            word_embed = word_embed.mean(dim=0).cpu().detach().numpy()
             word_count += 1
             word_rep += word_embed
     mean_word_rep = word_rep / word_count
@@ -609,7 +610,8 @@ def get_bert_mean_std():
             word_ids = np.array(encoded_inputs.word_ids(j))
             word_choice = np.random.choice(word_ids, 1)[0]
             word_tokenids = np.argwhere(word_ids == word_choice)
-            word_embed = vector[j][word_tokenids].mean(dim=0).cpu().detach().numpy()
+            word_embed = vector[j][word_tokenids]
+            word_embed = word_embed.mean(dim=0).flatten().cpu().detach().numpy()
             word_embed = np.square(word_embed - mean_word_rep)
             word_count += 1
             word_rep += word_embed
