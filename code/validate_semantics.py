@@ -316,6 +316,11 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
     else: 
         for vec in bert_vecs: 
             bert_vecs[vec] = np.array(bert_vecs[vec])
+            
+    if lexicon_name == 'person': 
+        # get bert_vector for 'person'
+        # TODO: load vector for person, put it in bert_vecs
+        pass
         
     axes, axes_vocab = load_wordnet_axes()
     print("getting poles...")
@@ -331,12 +336,22 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
         for score in lexicon_dict[c]: 
             for word in lexicon_dict[c][score]: 
                 if word not in bert_vecs: continue
-                word_matrix.append(bert_vecs[word])
-                word_order.append(word)
-                if score == 'high': 
-                    score_matrix.append(1)
-                elif score == 'low': 
-                    score_matrix.append(0)
+                if lexicon_name != 'person': 
+                    word_matrix.append(bert_vecs[word])
+                    word_order.append(word)
+                    if score == 'high': 
+                        score_matrix.append(1)
+                    elif score == 'low': 
+                        score_matrix.append(0)
+                else: 
+                    if score == 'high': 
+                        score_matrix.append(1)
+                        word_order.append(word)
+                        word_matrix.append(bert_vecs[word])
+                    elif score == 'low': 
+                        score_matrix.append(0)
+                        word_order.append('person')
+                        word_matrix.append(bert_vecs['person'])
         score_matrices[c] = np.array(score_matrix)
         word_matrices[c] = np.array(word_matrix)
         

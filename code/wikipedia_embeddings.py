@@ -105,15 +105,13 @@ def exact_sample(tup):
     else: 
         return (tup[0], random.sample(occur, 1000))
             
-def sample_wikipedia(): 
+def sample_wikipedia_helper(vocab, vocab_name): 
     '''
     Finds occurrences of vocab words in wikipedia. 
     
     Note: the adjectives in "adj_lines.json" have "xqxq"
     instead of "-" to account for dashed words for tokenization. 
     '''
-    vocab = get_adj()
-    vocab_name = 'adj'
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     sqlContext = SQLContext(sc)
@@ -144,6 +142,12 @@ def sample_wikipedia():
     data = data.filter(lambda tup: tup[1] in line_ids_to_keep).map(lambda tup: str(tup[1]) + '\t' + tup[0]) 
     data.coalesce(1).saveAsTextFile(LOGS + 'wikipedia/' + vocab_name + '_data')
     sc.stop()
+    
+def sample_wikipedia(): 
+    #vocab = get_adj()
+    #sample_wikipedia_helper(vocab, 'adj')
+    vocab = set(['person'])
+    sample_wikipedia_helper(vocab, 'person')
     
 def count_axes(): 
     '''
@@ -474,6 +478,64 @@ def get_occupation_embeddings(occ_sents_path, outpath, find_person=False):
     with open(outpath, 'w') as outfile: 
         json.dump(res, outfile)
         
+def get_person_embedding(): 
+    '''
+    For each line, get the embedding for 'person', and save it as a .npy
+    '''        
+    print("Batching data...")
+    batch_size = 8
+    batch_sentences = [] # each item is a list
+    curr_batch = []
+    btokenizer = BasicTokenizer(do_lower_case=True)
+    with open(LOGS + 'wikipedia/person_data/part-00000', 'r') as infile: 
+        for line in infile: 
+            text = line.strip().split('\t')[1]
+            tokens = btokenizer.tokenize(text)
+            curr_batch.append(tokens)
+            if len(curr_batch) == batch_size: 
+                batch_sentences.append(curr_batch)
+                curr_batch = []
+    if len(curr_batch) != 0: # fence post
+        batch_sentences.append(curr_batch)
+
+    print("Getting model...")
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.to(device)
+    model.eval()
+    
+    word_count = 0
+    word_rep = np.zeros(3072)
+    
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        word_tokenids = {} # { j : { word : [token ids] } }
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = []
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word == 'person': 
+                        word_tokenids.append(k)
+            token_ids_word = np.array(word_tokenids) 
+            word_embed = vector[j][token_ids_word].cpu().detach().numpy() 
+            if np.isnan(word_embed).any(): 
+                print("PROBLEM!!!", batch[j], word_id, word_tokenids)
+                return 
+            word_rep += word_embed
+            word_count += 1
+    
+    res = word_rep / word_count
+    np.save(LOGS + 'semantics_val/person.npy', res)
+        
 def get_bert_mean_std(): 
     '''
     Get a mean and standard deviation vector
@@ -553,8 +615,9 @@ def main():
     #print("**********************")
     #get_bert_mean_std()
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
-    get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
-                              LOGS + 'semantics_val/person_BERT.json', find_person=True)
+    #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
+    #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
+    get_person_embedding()
 
 if __name__ == '__main__':
     main()
