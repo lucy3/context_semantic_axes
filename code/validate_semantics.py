@@ -483,8 +483,111 @@ def check_separability(exp_name):
         if exp_name.startswith('bert-base-prob'): 
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
         loo_val_bert(in_folder, axes, exp_name)
+        
+def consistency_helper(pole, left_vec, right_vec, outfile): 
+    sims = cosine_similarity(left_vec)
+    # remove diagonal and half 
+    avg_sims = (np.sum(sims) - left_vec.shape[0]) / 2
+    total_pairs = left_vec.shape[0] * (left_vec.shape[0] - 1) / 2
+    avg_sims = avg_sims / total_pairs
+    outfile.write(pole + '\t' + str(avg_sims) + '\tleft\n')
+    
+    sims = cosine_similarity(right_vec)
+    # remove diagonal and half 
+    avg_sims = (np.sum(sims) - right_vec.shape[0]) / 2
+    total_pairs = right_vec.shape[0] * (right_vec.shape[0] - 1) / 2
+    avg_sims = avg_sims / total_pairs
+    outfile.write(pole + '\t' + str(avg_sims) + '\tright\n')
+        
+def consistency_glove(vec_dict, axes, exp_name): 
+    random_adj = []
+    with open(LOGS + 'semantics_val/axes_consistency_' + exp_name + '.txt', 'w') as outfile: 
+        for pole in sorted(axes.keys()): 
+            left = axes[pole][0] # list of words
+            left_vec = [] # list of vectors 
+            left_vocab = []
+            for w in left: 
+                if w in vec_dict: 
+                    left_vec.append(vec_dict[w])
+                    left_vocab.append(w)
+                    if random.randrange(100) < 5: 
+                        random_adj.append(w)
+            left_vec = np.array(left_vec)
+            right = axes[pole][1]
+            right_vec = [] # list of vectors 
+            right_vocab = []
+            for w in right: 
+                if w in vec_dict: 
+                    right_vec.append(vec_dict[w])
+                    right_vocab.append(w)
+                    if random.randrange(100) < 5: 
+                        random_adj.append(w)
+            right_vec = np.array(right_vec)
+            consistency_helper(pole, left_vec, right_vec, outfile)
+            
+        random_vecs = []
+        for w in random_adj: 
+            random_vecs.append(vec_dict[w])
+        sims = cosine_similarity(np.array(random_vecs))
+        avg_sims = (np.sum(sims) - random_vecs.shape[0]) / 2
+        total_pairs = random_vecs.shape[0] * (random_vecs.shape[0] - 1) / 2
+        avg_sims = avg_sims / total_pairs
+        outfile.write('null_size\t' + str(len(random_vecs)) + '\tnull_size\n')
+        outfile.write('null\t' + str(avg_sims) + '\tnull\n')
+        
+def consistency_bert(in_folder, axes, exp_name): 
+    with open(in_folder + 'word_rep_key.json', 'r') as infile: 
+        word_rep_keys = json.load(infile)
+    random_vecs = []
+    with open(LOGS + 'semantics_val/axes_consistency_' + exp_name + '.txt', 'w') as outfile: 
+        for pole in tqdm(sorted(axes.keys())): 
+            left = axes[pole][0] # list of words
+            left_pole = pole + '_left'
+            left_vec, _ = get_vecs_and_map(in_folder, left, left_pole, \
+                                                               word_rep_keys, exp_name)
+            for i in range(left_vec.shape[0]): 
+                if random.randrange(100) < 5: 
+                    random_vecs.append(left_vec[i])
+            
+            right = axes[pole][1]
+            right_pole = pole + '_right'
+            right_vec, _ = get_vecs_and_map(in_folder, right, right_pole, \
+                                                               word_rep_keys, exp_name)
+            for i in range(right_vec.shape[0]): 
+                if random.randrange(100) < 5: 
+                    random_vecs.append(right_vec[i])
+            consistency_helper(pole, left_vec, right_vec, outfile)
+            
+        sims = cosine_similarity(np.array(random_vecs))
+        avg_sims = (np.sum(sims) - random_vecs.shape[0]) / 2
+        total_pairs = random_vecs.shape[0] * (random_vecs.shape[0] - 1) / 2
+        avg_sims = avg_sims / total_pairs
+        outfile.write('null_size\t' + str(len(random_vecs)) + '\tnull_size\n')
+        outfile.write('null\t' + str(avg_sims) + '\tnull\n')
+        
+def check_consistency(exp_name): 
+    axes, axes_vocab = load_wordnet_axes()
+    vocab = set()
+    if exp_name in ['default', 'glove-zscore']: 
+        vec_dict = get_glove_vecs(vocab, axes_vocab, exp_name)
+        consistency_glove(vec_dict, axes, exp_name)
+        return
+    if exp_name in ['bert-default', 'bert-zscore']: 
+        in_folder = LOGS + 'wikipedia/substitutes/bert-default/'
+        consistency_bert(in_folder, axes, exp_name)
+    elif 'prob' in exp_name and 'bert' in exp_name: 
+        if exp_name.startswith('bert-base-prob'): 
+            in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
+        consistency_bert(in_folder, axes, exp_name)
     
 def main(): 
+#     # ------ CONSISTENCY ------
+    check_consistency('default')
+    check_consistency('glove-zscore')
+    check_consistency('bert-default')
+    check_consistency('bert-zscore')
+    check_consistency('bert-base-prob')
+    check_consistency('bert-base-prob-zscore')
 #     # ------ SEPARABILITY ------
 #     check_separability('default')
 #     check_separability('glove-zscore')
