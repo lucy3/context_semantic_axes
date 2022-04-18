@@ -558,12 +558,12 @@ def check_consistency(exp_name):
     
 def main(): 
 #     # ------ CONSISTENCY ------
-    check_separability('default')
-    check_separability('glove-zscore')
-    check_separability('bert-default')
-    check_separability('bert-zscore')
-    check_separability('bert-base-prob')
-    check_separability('bert-base-prob-zscore')
+    check_consistency('default')
+    check_consistency('glove-zscore')
+    check_consistency('bert-default')
+    check_consistency('bert-zscore')
+    check_consistency('bert-base-prob')
+    check_consistency('bert-base-prob-zscore')
 #     # ------ SEPARABILITY ------
 #     check_separability('default')
 #     check_separability('glove-zscore')
