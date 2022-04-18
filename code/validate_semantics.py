@@ -484,7 +484,7 @@ def check_separability(exp_name):
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
         loo_val_bert(in_folder, axes, exp_name)
         
-def consistency_helper(left_vec, right_vec, outfile): 
+def consistency_helper(pole, left_vec, right_vec, outfile): 
     left_var = np.mean(np.var(left_vec, axis=0))
     outfile.write(pole + '\t' + str(left_var) + '\tleft\n')
     right_var = np.mean(np.var(left_vec, axis=0))
@@ -522,7 +522,7 @@ def consistency_glove(vec_dict, axes, exp_name):
                     right_vec.append(vec_dict[w])
                     right_vocab.append(w)
             right_vec = np.array(right_vec)
-            consistency_helper(left_vec, right_vec, outfile)
+            consistency_helper(pole, left_vec, right_vec, outfile)
         
 def consistency_bert(in_folder, axes, exp_name): 
     with open(in_folder + 'word_rep_key.json', 'r') as infile: 
