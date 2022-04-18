@@ -483,87 +483,8 @@ def check_separability(exp_name):
         if exp_name.startswith('bert-base-prob'): 
             in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
         loo_val_bert(in_folder, axes, exp_name)
-        
-def consistency_helper(pole, left_vec, right_vec, outfile): 
-    left_var = np.mean(np.var(left_vec, axis=0))
-    outfile.write(pole + '\t' + str(left_var) + '\tleft\n')
-    right_var = np.mean(np.var(right_vec, axis=0))
-    outfile.write(pole + '\t' + str(right_var) + '\tright\n')
-    min_examples = min(left_vec.shape[0], right_vec.shape[0])
-    if min_examples < left_vec.shape[0]: 
-        # sample from left_vec
-        idx = np.random.randint(left_vec.shape[0], size=min_examples)
-        left_vec = left_vec[idx,:]
-    elif min_examples < right_vec.shape[0]: 
-        # sample from right_vec
-        idx = np.random.randint(right_vec.shape[0], size=min_examples)
-        right_vec = right_vec[idx,:]
-    all_vecs = np.concatenate((left_vec, right_vec), axis=0)
-    all_var = np.mean(np.var(all_vecs, axis=0))
-
-    outfile.write(pole + '\t' + str(all_var) + '\tall\n')
-        
-def consistency_glove(vec_dict, axes, exp_name): 
-    with open(LOGS + 'semantics_val/axes_consistency_' + exp_name + '.txt', 'w') as outfile: 
-        for pole in sorted(axes.keys()): 
-            left = axes[pole][0] # list of words
-            left_vec = [] # list of vectors 
-            left_vocab = []
-            for w in left: 
-                if w in vec_dict: 
-                    left_vec.append(vec_dict[w])
-                    left_vocab.append(w)
-            left_vec = np.array(left_vec)
-            right = axes[pole][1]
-            right_vec = [] # list of vectors 
-            right_vocab = []
-            for w in right: 
-                if w in vec_dict: 
-                    right_vec.append(vec_dict[w])
-                    right_vocab.append(w)
-            right_vec = np.array(right_vec)
-            consistency_helper(pole, left_vec, right_vec, outfile)
-        
-def consistency_bert(in_folder, axes, exp_name): 
-    with open(in_folder + 'word_rep_key.json', 'r') as infile: 
-        word_rep_keys = json.load(infile)
-    with open(LOGS + 'semantics_val/axes_consistency_' + exp_name + '.txt', 'w') as outfile: 
-        for pole in tqdm(sorted(axes.keys())): 
-            left = axes[pole][0] # list of words
-            left_pole = pole + '_left'
-            left_vec, _ = get_vecs_and_map(in_folder, left, left_pole, \
-                                                               word_rep_keys, exp_name)
-            
-            right = axes[pole][1]
-            right_pole = pole + '_right'
-            right_vec, _ = get_vecs_and_map(in_folder, right, right_pole, \
-                                                               word_rep_keys, exp_name)
-            consistency_helper(pole, left_vec, right_vec, outfile)
-            
-        
-def check_consistency(exp_name): 
-    axes, axes_vocab = load_wordnet_axes()
-    vocab = set()
-    if exp_name in ['default', 'glove-zscore']: 
-        vec_dict = get_glove_vecs(vocab, axes_vocab, exp_name)
-        consistency_glove(vec_dict, axes, exp_name)
-        return
-    if exp_name in ['bert-default', 'bert-zscore']: 
-        in_folder = LOGS + 'wikipedia/substitutes/bert-default/'
-        consistency_bert(in_folder, axes, exp_name)
-    elif 'prob' in exp_name and 'bert' in exp_name: 
-        if exp_name.startswith('bert-base-prob'): 
-            in_folder = LOGS + 'wikipedia/substitutes/bert-base-prob/'
-        consistency_bert(in_folder, axes, exp_name)
     
 def main(): 
-#     # ------ CONSISTENCY ------
-    check_consistency('default')
-    check_consistency('glove-zscore')
-    check_consistency('bert-default')
-    check_consistency('bert-zscore')
-    check_consistency('bert-base-prob')
-    check_consistency('bert-base-prob-zscore')
 #     # ------ SEPARABILITY ------
 #     check_separability('default')
 #     check_separability('glove-zscore')
