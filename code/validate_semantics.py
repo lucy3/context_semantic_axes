@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 import os
 import re
 from nltk import tokenize
+import random
 
 ROOT = '/global/scratch/users/lucy3_li/manosphere/'
 #ROOT = '/mnt/data0/lucy/manosphere/'
@@ -529,8 +530,8 @@ def consistency_glove(vec_dict, axes, exp_name):
         for w in random_adj: 
             random_vecs.append(vec_dict[w])
         sims = cosine_similarity(np.array(random_vecs))
-        avg_sims = (np.sum(sims) - random_vecs.shape[0]) / 2
-        total_pairs = random_vecs.shape[0] * (random_vecs.shape[0] - 1) / 2
+        avg_sims = (np.sum(sims) - len(random_vecs)) / 2
+        total_pairs = len(random_vecs) * (len(random_vecs) - 1) / 2
         avg_sims = avg_sims / total_pairs
         outfile.write('null_size\t' + str(len(random_vecs)) + '\tnull_size\n')
         outfile.write('null\t' + str(avg_sims) + '\tnull\n')
@@ -559,11 +560,11 @@ def consistency_bert(in_folder, axes, exp_name):
             consistency_helper(pole, left_vec, right_vec, outfile)
             
         sims = cosine_similarity(np.array(random_vecs))
-        avg_sims = (np.sum(sims) - random_vecs.shape[0]) / 2
-        total_pairs = random_vecs.shape[0] * (random_vecs.shape[0] - 1) / 2
+        avg_sims = (np.sum(sims) - len(random_vecs)) / 2
+        total_pairs = len(random_vecs) * (len(random_vecs) - 1) / 2
         avg_sims = avg_sims / total_pairs
         outfile.write('null_size\t' + str(len(random_vecs)) + '\tnull_size\n')
-        outfile.write('null\t' + str(avg_sims) + '\tnull\n')
+        outfile.write('null\t' + str(avg_sims) + '\tnull\n')    
         
 def check_consistency(exp_name): 
     axes, axes_vocab = load_wordnet_axes()
