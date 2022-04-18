@@ -308,8 +308,6 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
         lexicon_dict = json.load(infile)
     with open(LOGS + 'semantics_val/' + lexicon_name + '_BERT.json', 'r') as infile: 
         bert_vecs = json.load(infile)
-    if lexicon_name == 'person': 
-        bert_vecs['person'] = np.load(LOGS + 'semantics_val/person.npy')
     if 'zscore' in exp_name: 
         bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
         bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
@@ -333,22 +331,12 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
         for score in lexicon_dict[c]: 
             for word in lexicon_dict[c][score]: 
                 if word not in bert_vecs: continue
-                if lexicon_name != 'person': 
-                    word_matrix.append(bert_vecs[word])
-                    word_order.append(word)
-                    if score == 'high': 
-                        score_matrix.append(1)
-                    elif score == 'low': 
-                        score_matrix.append(0)
-                else: 
-                    if score == 'high': 
-                        score_matrix.append(1)
-                        word_order.append(word)
-                        word_matrix.append(bert_vecs[word])
-                    elif score == 'low': 
-                        score_matrix.append(0)
-                        word_order.append('person')
-                        word_matrix.append(bert_vecs['person'])
+                word_matrix.append(bert_vecs[word])
+                word_order.append(word)
+                if score == 'high': 
+                    score_matrix.append(1)
+                elif score == 'low': 
+                    score_matrix.append(0)
         score_matrices[c] = np.array(score_matrix)
         word_matrices[c] = np.array(word_matrix)
         
