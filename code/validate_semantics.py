@@ -308,6 +308,8 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
         lexicon_dict = json.load(infile)
     with open(LOGS + 'semantics_val/' + lexicon_name + '_BERT.json', 'r') as infile: 
         bert_vecs = json.load(infile)
+    if lexicon_name == 'person': 
+        bert_vecs['person'] = np.load(LOGS + 'semantics_val/person.npy')
     if 'zscore' in exp_name: 
         bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
         bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
@@ -316,11 +318,6 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False):
     else: 
         for vec in bert_vecs: 
             bert_vecs[vec] = np.array(bert_vecs[vec])
-            
-    if lexicon_name == 'person': 
-        # get bert_vector for 'person'
-        # TODO: load vector for person, put it in bert_vecs
-        pass
         
     axes, axes_vocab = load_wordnet_axes()
     print("getting poles...")
