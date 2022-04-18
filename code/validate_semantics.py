@@ -499,6 +499,13 @@ def consistency_helper(pole, left_vec, right_vec, outfile):
     total_pairs = right_vec.shape[0] * (right_vec.shape[0] - 1) / 2
     avg_sims = avg_sims / total_pairs
     outfile.write(pole + '\t' + str(avg_sims) + '\tright\n')
+    
+    all_vecs = np.concatenate((left_vec, right_vec), axis=0)
+    sims = cosine_similarity(np.array(all_vecs))
+    avg_sims = (np.sum(sims) - len(all_vecs)) / 2
+    total_pairs = len(all_vecs) * (len(all_vecs) - 1) / 2
+    avg_sims = avg_sims / total_pairs
+    outfile.write(pole + '\t' + str(avg_sims) + '\tall\n')
         
 def consistency_glove(vec_dict, axes, exp_name): 
     random_adj = []
@@ -525,16 +532,6 @@ def consistency_glove(vec_dict, axes, exp_name):
                         random_adj.append(w)
             right_vec = np.array(right_vec)
             consistency_helper(pole, left_vec, right_vec, outfile)
-            
-        random_vecs = []
-        for w in random_adj: 
-            random_vecs.append(vec_dict[w])
-        sims = cosine_similarity(np.array(random_vecs))
-        avg_sims = (np.sum(sims) - len(random_vecs)) / 2
-        total_pairs = len(random_vecs) * (len(random_vecs) - 1) / 2
-        avg_sims = avg_sims / total_pairs
-        outfile.write('null_size\t' + str(len(random_vecs)) + '\tnull_size\n')
-        outfile.write('null\t' + str(avg_sims) + '\tnull\n')
         
 def consistency_bert(in_folder, axes, exp_name): 
     with open(in_folder + 'word_rep_key.json', 'r') as infile: 
