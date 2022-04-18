@@ -524,9 +524,12 @@ def get_person_embedding():
                 if word_id is not None: 
                     curr_word = batch[j][word_id]
                     if curr_word == 'person': 
+                        # only use first instance
                         word_tokenids.append(k)
+                        break
             token_ids_word = np.array(word_tokenids) 
-            word_embed = vector[j][token_ids_word].cpu().detach().numpy() 
+            word_embed = vector[j][token_ids_word]
+            word_embed = word_embed.mean(dim=0).cpu().detach().numpy() 
             if np.isnan(word_embed).any(): 
                 print("PROBLEM!!!", batch[j], word_id, word_tokenids)
                 return 
