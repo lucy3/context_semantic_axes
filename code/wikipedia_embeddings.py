@@ -551,7 +551,7 @@ def get_bert_mean_std():
     batch_sentences = [] # each item is a list
     curr_batch = []
     print("Batching data...")
-    prob = 10
+    prob = 5
     btokenizer = BasicTokenizer(do_lower_case=True)
     with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in infile:
@@ -585,7 +585,7 @@ def get_bert_mean_std():
         # batch_size x seq_len x 3072
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
         for j in range(len(batch)): # for every example
-            word_ids = np.array(encoded_inputs.word_ids(j))
+            word_ids = np.array([wi for wi in set(encoded_inputs.word_ids(j)) if wi is not None])
             word_choice = np.random.choice(word_ids, 1)[0]
             word_tokenids = np.argwhere(word_ids == word_choice)
             word_embed = vector[j][word_tokenids]
@@ -593,7 +593,7 @@ def get_bert_mean_std():
             word_count += 1
             word_rep += word_embed
     mean_word_rep = word_rep / word_count
-    
+
     print("Calculate std...")
     word_rep = np.zeros(3072)
     word_count = 0
@@ -607,7 +607,7 @@ def get_bert_mean_std():
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
         
         for j in range(len(batch)): # for every example
-            word_ids = np.array(encoded_inputs.word_ids(j))
+            word_ids = np.array([wi for wi in set(encoded_inputs.word_ids(j)) if wi is not None])
             word_choice = np.random.choice(word_ids, 1)[0]
             word_tokenids = np.argwhere(word_ids == word_choice)
             word_embed = vector[j][word_tokenids]
@@ -616,6 +616,8 @@ def get_bert_mean_std():
             word_count += 1
             word_rep += word_embed
     std_word_rep = np.sqrt(word_rep / word_count)
+    with open(LOGS + 'wikipedia/mean_std_count.txt', 'w') as outfile: 
+        outfile.write(str(word_count) + '\n')
     np.save(LOGS + 'wikipedia/mean_BERT.npy', mean_word_rep)
     np.save(LOGS + 'wikipedia/std_BERT.npy', std_word_rep)
 
