@@ -538,7 +538,7 @@ def consistency_bert(in_folder, axes, exp_name):
             right_pole = pole + '_right'
             right_vec, _ = get_vecs_and_map(in_folder, right, right_pole, \
                                                                word_rep_keys, exp_name)
-            consistency_helper(left_vec, right_vec, outfile)
+            consistency_helper(pole, left_vec, right_vec, outfile)
             
         
 def check_consistency(exp_name): 
