@@ -551,13 +551,15 @@ def get_bert_mean_std():
     batch_sentences = [] # each item is a list
     curr_batch = []
     print("Batching data...")
-    prob = 5
+    prob = 10
+    btokenizer = BasicTokenizer(do_lower_case=True)
     with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in infile:
             if random.randrange(100) > prob: continue
             contents = line.split('\t')
-            text = '\t'.join(contents[1:]).lower()
-            curr_batch.append(text)
+            text = '\t'.join(contents[1:])
+            tokens = btokenizer.tokenize(text)
+            curr_batch.append(tokens)
             if len(curr_batch) == batch_size: 
                 batch_sentences.append(curr_batch)
                 curr_batch = []
@@ -575,35 +577,42 @@ def get_bert_mean_std():
     word_rep = np.zeros(3072)
     word_count = 0
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
-        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, 
+                                   padding=True, truncation=True, return_tensors="pt")
         encoded_inputs.to(device)
         outputs = model(**encoded_inputs, output_hidden_states=True)
         states = outputs.hidden_states # tuple
         # batch_size x seq_len x 3072
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
-        indices = np.random.randint(vector.size()[1], size=vector.size()[0])
-        # batch_size x 3072
-        vector = vector[np.arange(vector.size()[0]),indices,:]
-        word_count += vector.size()[0]
-        word_rep += vector.sum(dim=0).cpu().detach().numpy()
+        for j in range(len(batch)): # for every example
+            word_ids = np.array(encoded_inputs.word_ids(j))
+            word_choice = np.random.choice(word_ids, 1)[0]
+            word_tokenids = np.argwhere(word_ids == word_choice)
+            word_embed = vector[j][word_tokenids].mean(dim=0).cpu().detach().numpy()
+            word_count += 1
+            word_rep += word_embed
     mean_word_rep = word_rep / word_count
     
     print("Calculate std...")
     word_rep = np.zeros(3072)
     word_count = 0
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
-        encoded_inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, 
+                                   padding=True, truncation=True, return_tensors="pt")
         encoded_inputs.to(device)
         outputs = model(**encoded_inputs, output_hidden_states=True)
         states = outputs.hidden_states # tuple
         # batch_size x seq_len x 3072
         vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
-        indices = np.random.randint(vector.size()[1], size=vector.size()[0])
-        # batch_size x 3072
-        vector = vector[np.arange(vector.size()[0]),indices,:].cpu().detach().numpy()
-        word_count += vector.shape[0]
-        vector = np.square(vector - mean_word_rep)
-        word_rep += np.sum(vector, axis=0)
+        
+        for j in range(len(batch)): # for every example
+            word_ids = np.array(encoded_inputs.word_ids(j))
+            word_choice = np.random.choice(word_ids, 1)[0]
+            word_tokenids = np.argwhere(word_ids == word_choice)
+            word_embed = vector[j][word_tokenids].mean(dim=0).cpu().detach().numpy()
+            word_embed = np.square(word_embed - mean_word_rep)
+            word_count += 1
+            word_rep += word_embed
     std_word_rep = np.sqrt(word_rep / word_count)
     np.save(LOGS + 'wikipedia/mean_BERT.npy', mean_word_rep)
     np.save(LOGS + 'wikipedia/std_BERT.npy', std_word_rep)
@@ -616,11 +625,11 @@ def main():
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
-    #get_bert_mean_std()
+    get_bert_mean_std()
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
     #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
     #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
-    get_person_embedding()
+    #get_person_embedding()
 
 if __name__ == '__main__':
     main()
