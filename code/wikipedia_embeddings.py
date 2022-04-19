@@ -505,7 +505,7 @@ def get_person_embedding():
     model.to(device)
     model.eval()
     
-    word_rep = np.zeros(50, 3072)
+    word_rep = np.zeros((50, 3072))
     word_counts = np.zeros(50)
     
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
