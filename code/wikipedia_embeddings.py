@@ -538,7 +538,7 @@ def get_person_embedding():
             word_rep[idx] += word_embed
             word_counts[idx] += 1
     res = []
-    for idx in word_counts: 
+    for idx in range(50): 
         res.append(list(word_rep[idx] / word_counts[idx]))
     res = np.array(res)
     np.save(LOGS + 'semantics_val/person.npy', res)
