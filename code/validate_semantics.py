@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import csv
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from scipy import spatial
+from scipy import spatial, stats
 import math
 from sklearn.feature_selection import SelectKBest, f_classif, SelectPercentile
 import requests
@@ -22,8 +22,8 @@ import re
 from nltk import tokenize
 import random
 
-ROOT = '/global/scratch/users/lucy3_li/manosphere/'
-#ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 GLOVE = DATA + 'glove/'
 LOGS = ROOT + 'logs/'
@@ -206,13 +206,13 @@ def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False
     '''
     called by frameaxis_bert() and frameaxis_glove()
     '''
-    N = 1000 # number of bootstrap samples
+    N = 100 # number of bootstrap samples
     biases = defaultdict(dict) # {c : { pole : (bias_sep, effect, bias1, bias2) } }
     for c in score_matrices: 
         score_matrix = score_matrices[c]
         word_matrix = word_matrices[c]
         
-        for pole in adj_poles: 
+        for pole in tqdm(adj_poles): 
             left_vecs, right_vecs = adj_poles[pole]
             this_word_matrix = word_matrix
                 
@@ -225,22 +225,28 @@ def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=False
             bias_sep = abs(b_t_f2 - b_t_f1)
 
             if calc_effect: 
-                samples = []
+                # calculate statistical significance 
+                random_samples = []
+                labeled_samples = []
                 for i in range(N): 
-                    idx1 = np.random.choice(c_w_f.shape[0], size=c_w_f1.shape[0], replace=False)
-                    sample1 = c_w_f[idx1, :]
-                    b_t_sample1 = np.mean(sample1)
-
-                    idx2 = np.random.choice(c_w_f.shape[0], size=c_w_f2.shape[0], replace=False)
-                    sample2 = c_w_f[idx2, :]
-                    b_t_sample2 = np.mean(sample2)
-
-                    bias_sep_sample = abs(b_t_sample1 - b_t_sample2)
-                    samples.append(bias_sep_sample)
-                effect = bias_sep - np.mean(samples)
+                    # bootstrap samples from everywhere
+                    idx = np.random.choice(c_w_f.shape[0], size=c_w_f2.shape[0], replace=True)
+                    sample = c_w_f[idx, :]
+                    # calculate bias on sample
+                    b_t_sample = np.mean(sample)
+                    random_samples.append(b_t_sample)
+                    # bootstrap samples from score=1
+                    idx = np.random.choice(c_w_f2.shape[0], size=c_w_f2.shape[0], replace=True)
+                    sample = c_w_f2[idx, :]
+                    # calculate bias on sample
+                    b_t_sample = np.mean(sample)
+                    labeled_samples.append(b_t_sample)
+                t_stat, p_val = stats.ttest_ind(random_samples, labeled_samples)
+                effect = b_t_f2 - np.mean(random_samples)
             else: 
+                p_val = 0
                 effect = 0
-            biases[c][pole] = (bias_sep, effect, b_t_f1, b_t_f2)
+            biases[c][pole] = (bias_sep, p_val, effect, b_t_f1, b_t_f2)
     return biases
 
 def load_inputs(file_path, lexicon_name): 
@@ -333,6 +339,7 @@ def get_poles_bert(axes, exp_name):
     return adj_poles
         
 def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False): 
+    print("running", exp_name)
     with open(file_path, 'r') as infile:
         lexicon_dict = json.load(infile)
     with open(LOGS + 'semantics_val/' + lexicon_name + '_BERT.json', 'r') as infile: 
@@ -486,26 +493,27 @@ def check_separability(exp_name):
         loo_val_bert(in_folder, axes, exp_name)
     
 def main(): 
-    # ------ SEPARABILITY ------
-    check_separability('default')
-    check_separability('glove-zscore')
-    check_separability('bert-default')
-    check_separability('bert-zscore')
-    check_separability('bert-base-prob')
-    check_separability('bert-base-prob-zscore')
-    # ------ BERT OCCUPATIONS ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
-    #------ BERT PERSON ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-default')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-zscore')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob')
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob-zscore')
+#     # ------ SEPARABILITY ------
+#     check_separability('default')
+#     check_separability('glove-zscore')
+#     check_separability('bert-default')
+#     check_separability('bert-zscore')
+#     check_separability('bert-base-prob')
+#     check_separability('bert-base-prob-zscore')
+#     # ------ BERT OCCUPATIONS ------
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore', calc_effect=True)
+#     #------ BERT PERSON ------
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-default', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-zscore', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob-zscore', calc_effect=True)
     # ------ GLOVE -------
-    #save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
-    #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+#     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
+                    'occupations', exp_name='default', calc_effect=True)
 
 if __name__ == '__main__':
     main()

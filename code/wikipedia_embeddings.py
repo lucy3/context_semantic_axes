@@ -480,8 +480,8 @@ def get_occupation_embeddings(occ_sents_path, outpath, find_person=False):
         
 def get_person_embedding(): 
     '''
-    For each line, get the embedding for 'person', and save it as a .npy
-    '''        
+    Get 50 random embeddings for 'person', and save them as a .npy
+    '''
     print("Batching data...")
     batch_size = 8
     batch_sentences = [] # each item is a list
@@ -505,8 +505,8 @@ def get_person_embedding():
     model.to(device)
     model.eval()
     
-    word_count = 0
-    word_rep = np.zeros(3072)
+    word_rep = np.zeros(50, 3072)
+    word_counts = np.zeros(50)
     
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
         word_tokenids = {} # { j : { word : [token ids] } }
@@ -533,10 +533,14 @@ def get_person_embedding():
             if np.isnan(word_embed).any(): 
                 print("PROBLEM!!!", batch[j], word_id, word_tokenids)
                 return 
-            word_rep += word_embed
-            word_count += 1
-    
-    res = word_rep / word_count
+            # choose random idx
+            idx = random.choice(range(50))
+            word_rep[idx] += word_embed
+            word_counts[idx] += 1
+    res = []
+    for idx in word_counts: 
+        res.append(list(word_reps[w] / word_counts[w]))
+    res = np.array(res)
     np.save(LOGS + 'semantics_val/person.npy', res)
         
 def get_bert_mean_std(): 
@@ -629,11 +633,11 @@ def main():
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
-    get_bert_mean_std()
+    #get_bert_mean_std()
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
     #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
     #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
-    #get_person_embedding()
+    get_person_embedding()
 
 if __name__ == '__main__':
     main()
