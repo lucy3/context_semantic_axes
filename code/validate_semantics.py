@@ -486,23 +486,23 @@ def check_separability(exp_name):
         loo_val_bert(in_folder, axes, exp_name)
     
 def main(): 
-#     # ------ SEPARABILITY ------
-#     check_separability('default')
-#     check_separability('glove-zscore')
-#     check_separability('bert-default')
-#     check_separability('bert-zscore')
-#     check_separability('bert-base-prob')
-#     check_separability('bert-base-prob-zscore')
-#     # ------ BERT OCCUPATIONS ------
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
-    # ------ BERT PERSON ------
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-default')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-zscore')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob')
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob-zscore')
+    # ------ SEPARABILITY ------
+    check_separability('default')
+    check_separability('glove-zscore')
+    check_separability('bert-default')
+    check_separability('bert-zscore')
+    check_separability('bert-base-prob')
+    check_separability('bert-base-prob-zscore')
+    # ------ BERT OCCUPATIONS ------
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore')
+    #------ BERT PERSON ------
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-default')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-zscore')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob')
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', exp_name='bert-base-prob-zscore')
     # ------ GLOVE -------
     #save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
     #frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
