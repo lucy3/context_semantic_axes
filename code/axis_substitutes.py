@@ -53,13 +53,14 @@ def predict_masked_sent(model_name, batch_sentences, batch_idx, batch_metadata, 
 def get_masked_probs(keywords, model_name, batch_sentences, batch_idx, batch_metadata, tokenizer):
     '''
     @inputs
-    - keywords: { adj : {synset_syn / synset_ant : [synonym or antonyms] } }
+    - keywords: { adj : {synset_syn / synset_ant : [synonym or antonyms] } },
+       where keywords are BERT vocab IDs. 
     - model_name: string that is the name of the model
     - batch_sentences: list of list of strings
     - batch_idx: list of list of index of the masked token
     - batch_metadata: list of list of (line_ID, adj)
     Produce an output file where each line is
-    "line_ID adjective synonym|prob synonym|prob ... antonym|prob antonym|prob
+    "pole_side line_ID adj keyword_prob keyword_prob ... "
     '''
     if model_name == 'bert-base-uncased' or model_name == 'bert-large-uncased': 
         model = BertForMaskedLM.from_pretrained(model_name)
@@ -219,12 +220,13 @@ def get_syn_ant():
                 antonyms[adj][synset + '_right'] = axis1
     return synonyms, antonyms
 
-def find_good_contexts_probs(model_name): 
+def find_good_contexts_probs(model_name, top_n=200): 
     '''
     The output of this function is the same format as adj_lines_random.json
     in wikipedia_embeddings.py. {line_num: [(adj, synset)]}
     '''
-    synonyms, antonyms = get_syn_ant()
+    print("TOP N:", top_n)
+    synonyms, antonyms = get_syn_ant() # {adj : {synset: [synonyms]} } or {adj : {synset: [antonyms]} }
     tokenizer = get_tokenizer(model_name)
     
     syn_scores = defaultdict(dict) # { synset_side : { line_ID_adj: [scores] } }
@@ -238,22 +240,22 @@ def find_good_contexts_probs(model_name):
                 print("Read in", c, "lines")
             c += 1
             contents = line.strip().split(' ')
-            line_num = contents[1]
-            adj = contents[2] 
-            adj_id = str(tokenizer.convert_tokens_to_ids([adj])[0])
-            subs = []
-            scores = []
-            if len(contents) > 3: 
-                for i in range(3, len(contents)): 
+            line_num = contents[1] # line number
+            adj = contents[2] # adj masked in that line
+            adj_id = str(tokenizer.convert_tokens_to_ids([adj])[0]) # bert token ID
+            subs = [] # substitute bert ID
+            scores = [] # probability
+            if len(contents) > 3: # at least one substitute
+                for i in range(3, len(contents)): # every substitute
                     item = contents[i].split('_')
                     # leave out correct substitute
                     if item[0] == adj_id: 
                         continue
-                    scores.append(float(item[1]))
-                    subs.append(item[0])
-            synset_a_s = contents[0].split('_')
-            synset = synset_a_s[0]
-            if synset + '_left' in synonyms[adj]: 
+                    scores.append(float(item[1])) # prob
+                    subs.append(item[0]) # substitute bert ID
+            synset_a_s = contents[0].split('_') # [synset, syn or ant]
+            synset = synset_a_s[0] 
+            if synset + '_left' in synonyms[adj]: # map from syn/ant to synset side
                 synset_side = synset + '_left'
             if synset + '_right' in synonyms[adj]: 
                 synset_side = synset + '_right'
@@ -267,6 +269,7 @@ def find_good_contexts_probs(model_name):
     c = 0
     adj_lines = defaultdict(list)
     for synset_side in tqdm(syn_scores): 
+        # for synset_left or synset_right
         syn_avg_scores = Counter()
         for line_num_adj in syn_scores[synset_side]: 
             scores = syn_scores[synset_side][line_num_adj]
@@ -274,7 +277,8 @@ def find_good_contexts_probs(model_name):
                 # later will backoff onto BERT default
                 continue
             syn_avg_scores[line_num_adj] = sum(scores) / len(scores)
-        top_200 = syn_avg_scores.most_common(200)
+        # get top 200 contexts by average synonym prob
+        top_200 = syn_avg_scores.most_common(top_n)
         syn_ant_diff = Counter()
         for tup in top_200: 
             line_num_adj, score = tup
@@ -284,7 +288,8 @@ def find_good_contexts_probs(model_name):
             else: 
                 diff = syn_avg_scores[line_num_adj] - sum(scores) / len(scores)
             syn_ant_diff[line_num_adj] = diff
-        top_100 = syn_ant_diff.most_common(100)
+        # get top 100 contexts by difference between average synonym prob and average antonym prob
+        top_100 = syn_ant_diff.most_common(int(top_n/2))
         for tup in top_100: 
             line_adj = tup[0].split('_')
             line_ID = line_adj[0]
@@ -294,9 +299,9 @@ def find_good_contexts_probs(model_name):
     print("ADJ LINES LENGTH:", len(adj_lines))
             
     if model_name == 'bert-base-uncased': 
-        outfile_name = 'adj_lines_base-probs.json'
+        outfile_name = str(top_n) + '_adj_lines_base-probs.json'
     elif model_name == 'bert-large-uncased': 
-        outfile_name = 'adj_lines_large-probs.json'
+        outfile_name = str(top_n) + '_adj_lines_large-probs.json'
         
     with open(LOGS + 'wikipedia/' + outfile_name, 'w') as outfile: 
         json.dump(adj_lines, outfile)
@@ -418,10 +423,11 @@ def inspect_contexts(model_name):
 def main(): 
     #predict_substitutes('bert-base-uncased')
     #predict_substitutes('bert-large-uncased')
-    predict_substitute_probs('bert-large-uncased')
+    #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    #find_good_contexts_probs('bert-base-uncased')
+    for top_n in [50, 100, 150, 200, 250, 300]: 
+        find_good_contexts_probs('bert-base-uncased', top_n=top_n)
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
 
