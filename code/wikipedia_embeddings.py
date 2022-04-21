@@ -513,7 +513,7 @@ def get_person_embedding():
     model.to(device)
     model.eval()
     
-    word_rep = np.zeros(50, 3072)
+    word_rep = np.zeros((50, 3072))
     word_counts = np.zeros(50)
     
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
@@ -546,8 +546,8 @@ def get_person_embedding():
             word_rep[idx] += word_embed
             word_counts[idx] += 1
     res = []
-    for idx in word_counts: 
-        res.append(list(word_reps[w] / word_counts[w]))
+    for idx in range(50): 
+        res.append(list(word_rep[idx] / word_counts[idx]))
     res = np.array(res)
     np.save(LOGS + 'semantics_val/person.npy', res)
         
