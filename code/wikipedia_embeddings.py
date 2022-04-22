@@ -639,7 +639,7 @@ def main():
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
-    for top_n in [50, 100, 150, 250, 300]: 
+    for top_n in [350, 400, 450, 500]: 
         get_adj_embeddings('bert-base-prob', save_agg=False, top_n=top_n)
     #print("**********************")
     #get_bert_mean_std()

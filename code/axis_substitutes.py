@@ -426,7 +426,7 @@ def main():
     #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    for top_n in [50, 100, 150, 200, 250, 300]: 
+    for top_n in [350, 400, 450, 500]: 
         find_good_contexts_probs('bert-base-uncased', top_n=top_n)
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
