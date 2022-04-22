@@ -126,6 +126,9 @@ def get_occupation_pages_part1():
             old_list = classes[clss][g]
             for occ in old_list: 
                 new_occ = re.sub("[\(].*?[\)]", "", occ).lower()
+                if new_occ.endswith('s'): 
+                    # the sports people are plural, look for singular
+                    new_occ = new_occ[:-1]
                 new_list.append(new_occ)
             classes[clss][g] = new_list
     with open(DATA + 'semantics/cleaned/occupations.json', 'w') as outfile:
@@ -161,6 +164,9 @@ def get_occupation_pages_part2():
                         # found an occupation page
                         occ = pages_occ[idx]
                         occ = re.sub("[\(].*?[\)]", "", occ).lower()
+                        if occ.endswith('s'): 
+                            # the sports people are plural, look for singular
+                            occ = occ[:-1]
                         text = doc.get_text().split('\n')
                         sents = []
                         for l in text: 
@@ -262,7 +268,7 @@ def main():
     #prep_datasets()
     #retrieve_wordnet_axes()
     #axes_stats()
-    prep_person_exp()
+    #prep_person_exp()
     
 if __name__ == '__main__':
     main()
