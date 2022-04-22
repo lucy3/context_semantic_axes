@@ -510,7 +510,7 @@ def main():
 #     check_separability('bert-zscore')
 #     check_separability('bert-base-prob')
 #     check_separability('bert-base-prob-zscore')
-    for top_n in [50, 100, 150, 250, 300]: 
+    for top_n in [350, 400, 450, 500]: 
         check_separability('bert-base-prob' + str(top_n))
         check_separability('bert-base-prob' + str(top_n) + '-zscore')
 #     # ------ BERT OCCUPATIONS ------
