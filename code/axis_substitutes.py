@@ -13,7 +13,8 @@ import time
 import json
 from collections import defaultdict, Counter
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
@@ -291,10 +292,11 @@ def find_good_contexts_probs(model_name, top_n=200):
         # get top 100 contexts by difference between average synonym prob and average antonym prob
         top_100 = syn_ant_diff.most_common(int(top_n/2))
         for tup in top_100: 
-            line_adj = tup[0].split('_')
-            line_ID = line_adj[0]
-            adj = line_adj[1]
-            adj_lines[line_ID].append([adj, synset_side])
+            if tup[1] > 0: # syn must be greater than ant
+                line_adj = tup[0].split('_')
+                line_ID = line_adj[0]
+                adj = line_adj[1]
+                adj_lines[line_ID].append([adj, synset_side])
             
     print("ADJ LINES LENGTH:", len(adj_lines))
             
@@ -426,7 +428,7 @@ def main():
     #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    for top_n in [350, 400, 450, 500]: 
+    for top_n in [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]: 
         find_good_contexts_probs('bert-base-uncased', top_n=top_n)
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')

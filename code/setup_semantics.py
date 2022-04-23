@@ -184,7 +184,7 @@ def prep_datasets():
     '''
     This gathers and prepares occupation pages for axes evaluation. 
     '''
-    occupations()
+    #occupations()
     get_occupation_pages_part1()
     get_occupation_pages_part2()
 
@@ -265,10 +265,10 @@ def prep_person_exp():
         json.dump(new_occ_sents, outfile)
                 
 def main():
-    #prep_datasets()
+    prep_datasets()
     #retrieve_wordnet_axes()
     #axes_stats()
-    #prep_person_exp()
+    prep_person_exp()
     
 if __name__ == '__main__':
     main()

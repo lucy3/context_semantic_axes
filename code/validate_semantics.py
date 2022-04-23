@@ -358,6 +358,8 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_effect=False, rand
     print("running frameaxis...")
     biases = frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_effect=calc_effect)
     
+    if random_person: 
+        exp_name += '_randomp'
     with open(LOGS + 'semantics_val/' + lexicon_name + '/frameaxis_' + exp_name + '.json', 'w') as outfile:
         json.dump(biases, outfile)
         
@@ -523,14 +525,14 @@ def main():
                        exp_name='bert-base-prob' + str(top_n), calc_effect=True)
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', 
                        exp_name='bert-base-prob' + str(top_n) + '-zscore', calc_effect=True)
-    #------ BERT PERSON ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
+#   #  ------ BERT PERSON ------
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
                    exp_name='bert-default', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
                    exp_name='bert-zscore', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
                    exp_name='bert-base-prob', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
+    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
                    exp_name='bert-base-prob-zscore', calc_effect=True)
     for top_n in [400]: 
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
@@ -538,9 +540,9 @@ def main():
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
                        exp_name='bert-base-prob' + str(top_n) + '-zscore', calc_effect=True)
     # ------ GLOVE -------
-    save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
-    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
-                    'occupations', exp_name='default', calc_effect=True)
+#     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+#     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
+#                     'occupations', exp_name='default', calc_effect=True)
 
 if __name__ == '__main__':
     main()
