@@ -510,31 +510,23 @@ def main():
 #     check_separability('glove-zscore')
 #     check_separability('bert-default')
 #     check_separability('bert-zscore')
-#     check_separability('bert-base-prob')
-#     check_separability('bert-base-prob-zscore')
-#     for top_n in [350, 400, 450, 500]: 
+#     for top_n in [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]: 
 #         check_separability('bert-base-prob' + str(top_n))
 #         check_separability('bert-base-prob' + str(top_n) + '-zscore')
 #     # ------ BERT OCCUPATIONS ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob-zscore', calc_effect=True)
-    for top_n in [400]: 
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore', calc_effect=True)
+    for top_n in [200]: 
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', 
                        exp_name='bert-base-prob' + str(top_n), calc_effect=True)
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', 
                        exp_name='bert-base-prob' + str(top_n) + '-zscore', calc_effect=True)
 #   #  ------ BERT PERSON ------
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-default', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-zscore', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-base-prob', calc_effect=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-base-prob-zscore', calc_effect=True)
-    for top_n in [400]: 
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                    exp_name='bert-default', calc_effect=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                    exp_name='bert-zscore', calc_effect=True)
+    for top_n in [200]: 
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 
                        exp_name='bert-base-prob' + str(top_n), calc_effect=True)
         frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person', 

@@ -13,8 +13,8 @@ import time
 import json
 from collections import defaultdict, Counter
 
-ROOT = '/global/scratch/users/lucy3_li/manosphere/'
-#ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
@@ -221,12 +221,11 @@ def get_syn_ant():
                 antonyms[adj][synset + '_right'] = axis1
     return synonyms, antonyms
 
-def find_good_contexts_probs(model_name, top_n=200): 
+def find_good_contexts_probs(model_name): 
     '''
     The output of this function is the same format as adj_lines_random.json
     in wikipedia_embeddings.py. {line_num: [(adj, synset)]}
     '''
-    print("TOP N:", top_n)
     synonyms, antonyms = get_syn_ant() # {adj : {synset: [synonyms]} } or {adj : {synset: [antonyms]} }
     tokenizer = get_tokenizer(model_name)
     
@@ -270,40 +269,40 @@ def find_good_contexts_probs(model_name, top_n=200):
     c = 0
     adj_lines = defaultdict(list)
     for synset_side in tqdm(syn_scores): 
+        print(synset_side)
         # for synset_left or synset_right
         syn_avg_scores = Counter()
         for line_num_adj in syn_scores[synset_side]: 
-            scores = syn_scores[synset_side][line_num_adj]
-            if len(scores) == 0: 
+            syn_s = syn_scores[synset_side][line_num_adj]
+            ant_s = ant_scores[synset_side][line_num_adj]
+            if len(syn_s) == 0 or len(ant_s) == 0: 
                 # later will backoff onto BERT default
                 continue
-            syn_avg_scores[line_num_adj] = sum(scores) / len(scores)
-        # get top 200 contexts by average synonym prob
-        top_200 = syn_avg_scores.most_common(top_n)
-        syn_ant_diff = Counter()
-        for tup in top_200: 
-            line_num_adj, score = tup
-            scores = ant_scores[synset_side][line_num_adj]
-            if len(scores) == 0: 
-                diff = syn_avg_scores[line_num_adj]
-            else: 
-                diff = syn_avg_scores[line_num_adj] - sum(scores) / len(scores)
-            syn_ant_diff[line_num_adj] = diff
-        # get top 100 contexts by difference between average synonym prob and average antonym prob
-        top_100 = syn_ant_diff.most_common(int(top_n/2))
-        for tup in top_100: 
-            if tup[1] > 0: # syn must be greater than ant
-                line_adj = tup[0].split('_')
+            syn_avg_scores[line_num_adj] = sum(syn_s) / len(syn_s)
+        # sort contexts by average synonym prob
+        top_k = syn_avg_scores.most_common()
+        synset_total_vecs = 0 
+        for tup in top_k: 
+            line_num_adj, avg_syn_s = tup
+            # get lists of scores 
+            syn_s = syn_scores[synset_side][line_num_adj]
+            ant_s = ant_scores[synset_side][line_num_adj]
+            avg_ant_s = sum(ant_s) / len(ant_s)
+            if avg_syn_s > avg_ant_s: 
+                line_adj = line_num_adj.split('_')
                 line_ID = line_adj[0]
                 adj = line_adj[1]
                 adj_lines[line_ID].append([adj, synset_side])
+                synset_total_vecs += 1
+            if synset_total_vecs == 100: 
+                break
             
     print("ADJ LINES LENGTH:", len(adj_lines))
             
     if model_name == 'bert-base-uncased': 
-        outfile_name = str(top_n) + '_adj_lines_base-probs.json'
+        outfile_name = 'adj_lines_base-probs.json'
     elif model_name == 'bert-large-uncased': 
-        outfile_name = str(top_n) + '_adj_lines_large-probs.json'
+        outfile_name = 'adj_lines_large-probs.json'
         
     with open(LOGS + 'wikipedia/' + outfile_name, 'w') as outfile: 
         json.dump(adj_lines, outfile)
@@ -428,8 +427,7 @@ def main():
     #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    for top_n in [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]: 
-        find_good_contexts_probs('bert-base-uncased', top_n=top_n)
+    find_good_contexts_probs('bert-base-uncased')
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
 
