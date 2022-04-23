@@ -29,8 +29,8 @@ import numpy as np
 import os
 import copy
 
-#ROOT = '/global/scratch/users/lucy3_li/manosphere/'
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+#ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
@@ -302,11 +302,7 @@ def get_adj_embeddings(exp_name, save_agg=True, top_n=200):
     if exp_name.startswith('bert-base-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_base-substitutes.json'
     elif exp_name.startswith('bert-base-prob'): 
-        if top_n == 200: 
-            # default
-            input_json = LOGS + 'wikipedia/adj_lines_base-probs.json'
-        else: 
-            input_json = LOGS + 'wikipedia/' + str(top_n) + '_adj_lines_base-probs.json'
+        input_json = LOGS + 'wikipedia/' + str(top_n) + '_adj_lines_base-probs.json'
     elif exp_name.startswith('bert-large-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_large-substitutes.json'
     elif exp_name == 'bert-default': 
@@ -376,10 +372,9 @@ def get_adj_embeddings(exp_name, save_agg=True, top_n=200):
         with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
             json.dump(res, outfile)
     else: 
-        if top_n == 200: 
+        if not exp_name.startswith('bert-base-prob'): 
             out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
         else: 
-            assert exp_name.startswith('bert-base-prob') # parameter only used for this approach
             out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + str(top_n) + '/'
         if not os.path.exists(out_folder):
             os.makedirs(out_folder)
@@ -639,7 +634,7 @@ def main():
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
-    for top_n in [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]: 
+    for top_n in [200, 250, 300, 350, 400, 450, 500]: 
         get_adj_embeddings('bert-base-prob', save_agg=False, top_n=top_n)
     #print("**********************")
     #get_bert_mean_std()
