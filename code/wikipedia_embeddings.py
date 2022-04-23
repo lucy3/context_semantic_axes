@@ -290,7 +290,7 @@ def batch_adj_data(input_json, exp_name):
             batch_tups.append(curr_tups)
     return batch_sentences, batch_words, batch_tups, vocab
 
-def get_adj_embeddings(exp_name, save_agg=True, top_n=200): 
+def get_adj_embeddings(exp_name, save_agg=True): 
     '''
     This function gets embeddings for adjectives in Wikipedia
     This is slightly messy because adjectives in Wordnet 
@@ -302,7 +302,7 @@ def get_adj_embeddings(exp_name, save_agg=True, top_n=200):
     if exp_name.startswith('bert-base-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_base-substitutes.json'
     elif exp_name.startswith('bert-base-prob'): 
-        input_json = LOGS + 'wikipedia/' + str(top_n) + '_adj_lines_base-probs.json'
+        input_json = LOGS + 'wikipedia/adj_lines_base-probs.json'
     elif exp_name.startswith('bert-large-sub'): 
         input_json = LOGS + 'wikipedia/adj_lines_large-substitutes.json'
     elif exp_name == 'bert-default': 
@@ -372,10 +372,7 @@ def get_adj_embeddings(exp_name, save_agg=True, top_n=200):
         with open(LOGS + 'semantics_val/adj_BERT.json', 'w') as outfile: 
             json.dump(res, outfile)
     else: 
-        if not exp_name.startswith('bert-base-prob'): 
-            out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
-        else: 
-            out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + str(top_n) + '/'
+        out_folder = LOGS + 'wikipedia/substitutes/' + exp_name + '/'
         if not os.path.exists(out_folder):
             os.makedirs(out_folder)
         for ss in word_reps: 
@@ -634,8 +631,7 @@ def main():
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
-    for top_n in [200, 250, 300, 350, 400, 450, 500]: 
-        get_adj_embeddings('bert-base-prob', save_agg=False, top_n=top_n)
+    get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')

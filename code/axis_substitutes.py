@@ -225,6 +225,8 @@ def find_good_contexts_probs(model_name):
     '''
     The output of this function is the same format as adj_lines_random.json
     in wikipedia_embeddings.py. {line_num: [(adj, synset)]}
+    
+    ADJ LINES LENGTH: 107,793
     '''
     synonyms, antonyms = get_syn_ant() # {adj : {synset: [synonyms]} } or {adj : {synset: [antonyms]} }
     tokenizer = get_tokenizer(model_name)
@@ -269,7 +271,6 @@ def find_good_contexts_probs(model_name):
     c = 0
     adj_lines = defaultdict(list)
     for synset_side in tqdm(syn_scores): 
-        print(synset_side)
         # for synset_left or synset_right
         syn_avg_scores = Counter()
         for line_num_adj in syn_scores[synset_side]: 
