@@ -631,12 +631,12 @@ def main():
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
     #get_adj_embeddings('bert-base-sub-mask', save_agg=False)
-    get_adj_embeddings('bert-base-prob', save_agg=False)
+    #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
-    #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
-    #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
+    get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
+                              LOGS + 'semantics_val/person_BERT.json', find_person=True)
     #get_person_embedding()
 
 if __name__ == '__main__':
