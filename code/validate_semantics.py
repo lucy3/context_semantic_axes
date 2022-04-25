@@ -330,13 +330,13 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_pval=False, random
         for vec in bert_vecs: 
             bert_vecs[vec] = np.array(bert_vecs[vec])
             
-    if lexicon_name == 'person': # TODO: delete this chunk if it doesn't work
-        print("Standardizing person vectors")
-        all_vecs = np.array(list(bert_vecs.values()))
-        person_mean = np.mean(all_vecs, axis=0)
-        person_std = np.std(all_vecs, axis=0)
-        for vec in bert_vecs: 
-            bert_vecs[vec] = np.array(bert_vecs[vec]) - person_mean
+#     if lexicon_name == 'person': # TODO: delete this chunk if it doesn't work
+#         print("Standardizing person vectors")
+#         all_vecs = np.array(list(bert_vecs.values()))
+#         person_mean = np.mean(all_vecs, axis=0)
+#         person_std = np.std(all_vecs, axis=0)
+#         for vec in bert_vecs: 
+#             bert_vecs[vec] = np.array(bert_vecs[vec]) - person_mean
         
     axes, axes_vocab = load_wordnet_axes()
     print("getting poles...")
