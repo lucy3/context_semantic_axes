@@ -487,9 +487,12 @@ def get_person_embedding():
     batch_sentences = [] # each item is a list
     curr_batch = []
     btokenizer = BasicTokenizer(do_lower_case=True)
-    with open(LOGS + 'wikipedia/person_data/part-00000', 'r') as infile: 
-        for line in infile: 
-            text = line.strip().split('\t')[1]
+    
+    with open(DATA + 'semantics/person_occupation_sents.json', 'r') as infile: 
+        occ_sents = json.load(infile) 
+        
+    for occ in occ_sents: 
+        for text in occ_sents[occ]: 
             tokens = btokenizer.tokenize(text)
             curr_batch.append(tokens)
             if len(curr_batch) == batch_size: 

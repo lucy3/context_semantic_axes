@@ -308,7 +308,8 @@ def get_poles_bert(axes, exp_name):
         adj_poles[pole] = (left_vec, right_vec)
     return adj_poles
         
-def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_pval=False, random_person=False): 
+def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_pval=False, normalize_person=True,
+                   random_person=False): 
     '''
     Analous to frameaxis_glove(). 
     @inputs: 
@@ -322,21 +323,22 @@ def frameaxis_bert(file_path, lexicon_name, exp_name='', calc_pval=False, random
     with open(LOGS + 'semantics_val/' + lexicon_name + '_BERT.json', 'r') as infile: 
         bert_vecs = json.load(infile)
     if 'zscore' in exp_name: 
-        bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
-        bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
-        for vec in bert_vecs: 
-            bert_vecs[vec] = (np.array(bert_vecs[vec]) - bert_mean) / bert_std
+        pass # TODO: delete
+#         bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+#         bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+#         for vec in bert_vecs: 
+#             bert_vecs[vec] = (np.array(bert_vecs[vec]) - bert_mean) / bert_std
     else: 
         for vec in bert_vecs: 
             bert_vecs[vec] = np.array(bert_vecs[vec])
             
-#     if lexicon_name == 'person': # TODO: delete this chunk if it doesn't work
-#         print("Standardizing person vectors")
-#         all_vecs = np.array(list(bert_vecs.values()))
-#         person_mean = np.mean(all_vecs, axis=0)
-#         person_std = np.std(all_vecs, axis=0)
-#         for vec in bert_vecs: 
-#             bert_vecs[vec] = np.array(bert_vecs[vec]) - person_mean
+    if lexicon_name == 'person' and normalize_person: # TODO: delete this chunk if it doesn't work
+        print("Standardizing person vectors")
+        all_vecs = np.array(list(bert_vecs.values()))
+        person_mean = np.mean(all_vecs, axis=0)
+        person_std = np.std(all_vecs, axis=0)
+        for vec in bert_vecs: 
+            bert_vecs[vec] = (bert_vecs[vec] - person_mean) / person_std
         
     axes, axes_vocab = load_wordnet_axes()
     print("getting poles...")
