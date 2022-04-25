@@ -480,7 +480,7 @@ def get_occupation_embeddings(occ_sents_path, outpath, find_person=False):
         
 def get_person_embedding(): 
     '''
-    Get 50 random embeddings for 'person', and save them as a .npy
+    Get mean and std for 'person'.
     '''
     print("Batching data...")
     batch_size = 8
@@ -505,9 +505,9 @@ def get_person_embedding():
     model.to(device)
     model.eval()
     
-    word_rep = np.zeros((50, 3072))
-    word_counts = np.zeros(50)
-    
+    print("Calculate mean...")
+    word_rep = np.zeros(3072)
+    word_count = 0
     for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
         word_tokenids = {} # { j : { word : [token ids] } }
         encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
@@ -533,15 +533,45 @@ def get_person_embedding():
             if np.isnan(word_embed).any(): 
                 print("PROBLEM!!!", batch[j], word_id, word_tokenids)
                 return 
-            # choose random idx
-            idx = random.choice(range(50))
-            word_rep[idx] += word_embed
-            word_counts[idx] += 1
-    res = []
-    for idx in range(50): 
-        res.append(list(word_rep[idx] / word_counts[idx]))
-    res = np.array(res)
-    np.save(LOGS + 'semantics_val/person.npy', res)
+            word_count += 1
+            word_rep += word_embed
+    mean_word_rep = word_rep / word_count
+    
+    print("Calculate std...")
+    word_rep = np.zeros(3072)
+    word_count = 0
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        word_tokenids = {} # { j : { word : [token ids] } }
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = []
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word == 'person': 
+                        # only use first instance
+                        word_tokenids.append(k)
+                        break
+            token_ids_word = np.array(word_tokenids) 
+            word_embed = vector[j][token_ids_word]
+            word_embed = word_embed.mean(dim=0).cpu().detach().numpy() 
+            if np.isnan(word_embed).any(): 
+                print("PROBLEM!!!", batch[j], word_id, word_tokenids)
+                return 
+            word_embed = np.square(word_embed - mean_word_rep)
+            word_count += 1
+            word_rep += word_embed
+    std_word_rep = np.sqrt(word_rep / word_count)
+    
+    np.save(LOGS + 'semantics_val/person_mean.npy', mean_word_rep)
+    np.save(LOGS + 'semantics_val/person_std.npy', std_word_rep)
         
 def get_bert_mean_std(): 
     '''
@@ -634,10 +664,10 @@ def main():
     #get_adj_embeddings('bert-base-prob', save_agg=False)
     #print("**********************")
     #get_bert_mean_std()
-    get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
-    get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
-                              LOGS + 'semantics_val/person_BERT.json', find_person=True)
-    #get_person_embedding()
+    #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
+    #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
+    #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
+    get_person_embedding()
 
 if __name__ == '__main__':
     main()
