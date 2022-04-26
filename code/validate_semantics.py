@@ -208,29 +208,29 @@ def frameaxis_helper(score_matrices, word_matrices, adj_poles, calc_pval=False):
             c_w_f2 = c_w_f[score_matrix == 1] # this occupation category
             b_t_f1 = np.mean(c_w_f1) # bias 
             b_t_f2 = np.mean(c_w_f2) # bias
-            diff = b_t_f2 - b_t_f1 
-
+            
+            # calculate diff between these occupations' mean and population cosine sim
+            # using bootstrap sample of all occupations of size c_w_f2.shape[0]
             if calc_pval: 
-                # permutation test
-                count_greater = 0
-                num_samples = 1000
-                fake_scores = np.zeros(score_matrix.shape[0])
-                for i in range(num_samples): 
-                    # choose some indices to have score == 1, the rest are 0
-                    idx = np.random.choice(range(score_matrix.shape[0]), size=c_w_f2.shape[0])
-                    fake_scores[idx] = 1
-                    fake_c_w_f1 = c_w_f[fake_scores == 0] 
-                    fake_c_w_f2 = c_w_f[fake_scores == 1] 
-                    fake_b_t_f1 = np.mean(fake_c_w_f1) 
-                    fake_b_t_f2 = np.mean(fake_c_w_f2) 
-                    fake_diff = fake_b_t_f2 - fake_b_t_f1
-                    if fake_diff > diff: 
-                        count_greater += 1
-                    fake_scores = np.zeros(score_matrix.shape[0])
-                p_val = count_greater / num_samples
+                # calculate statistical significance 
+                random_samples = []
+                random_std = []
+                N = 1000
+                for i in range(N): 
+                    # bootstrap samples from everywhere
+                    idx = np.random.choice(c_w_f.shape[0], size=c_w_f2.shape[0], replace=True)
+                    sample = c_w_f[idx, :]
+                    # calculate bias on sample
+                    b_t_sample = np.mean(sample)
+                    std_sample = np.std(sample)
+                    random_samples.append(b_t_sample)
+                    random_std.append(std_sample)
+                t_stat, p_val = stats.ttest_1samp(random_samples, b_t_f2) # one sample t test 
+                effect = b_t_f2 - np.mean(random_samples)
             else: 
                 p_val = 0
-            biases[c][pole] = (p_val, diff, b_t_f1, b_t_f2)
+                effect = 0
+            biases[c][pole] = (p_val, effect, b_t_f1, b_t_f2)
     return biases
 
 def load_inputs(file_path, lexicon_name): 
@@ -516,20 +516,20 @@ def main():
 #     check_separability('bert-base-prob')
 #     check_separability('bert-base-prob-zscore')
 #     # ------ BERT OCCUPATIONS ------
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default', calc_pval=False)
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore', calc_pval=False)
-#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob', calc_pval=False)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-default', calc_pval=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-zscore', calc_pval=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', exp_name='bert-base-prob', calc_pval=True)
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'occupations', 
-#                    exp_name='bert-base-prob-zscore', calc_pval=False)
+#                    exp_name='bert-base-prob-zscore', calc_pval=True)
 #   #  ------ BERT PERSON ------
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                    exp_name='bert-default', calc_pval=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                    exp_name='bert-zscore', calc_pval=True)
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                        exp_name='bert-base-prob', calc_pval=True)
     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-default', calc_pval=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                   exp_name='bert-zscore', calc_pval=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                       exp_name='bert-base-prob', calc_pval=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                       exp_name='bert-base-prob-zscore', calc_pval=True) # TODO: change to True
+                       exp_name='bert-base-prob-zscore', calc_pval=True) 
     # ------ GLOVE -------
 #     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
