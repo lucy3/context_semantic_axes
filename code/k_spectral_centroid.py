@@ -63,6 +63,7 @@ def cluster_time_series(k):
             
         if np.linalg.norm(prev_mem - mem) == 0: 
             break
+    np.save(TIME_SERIES_DIR + 'mu_' + str(k) + '.npy', mu)
     np.save(TIME_SERIES_DIR + 'clusters_set_' + str(k) + '.npy', mem)
     
 def main(): 
