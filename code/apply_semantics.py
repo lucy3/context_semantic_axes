@@ -20,6 +20,9 @@ def load_manosphere_vecs():
     In the reddit dataset alone, the size of
     full_reps is (257646, 3072)
     '''
+    
+    # TODO!!!!! get word vectors for each word type, over all of reddit_rel and forum_rel
+    
     bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
     bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
     
@@ -54,7 +57,7 @@ def quantify_axes_behavior():
     print("getting word vectors...")
     full_reps, vocab_order = load_manosphere_vecs()
     
-    print("calculating bias diversity...")
+    print("calculating bias of every word to every axis...")
     variances = Counter()
     scores = defaultdict(list) 
     for pole in tqdm(adj_poles): 
@@ -63,12 +66,14 @@ def quantify_axes_behavior():
         right_pole = right_vecs.mean(axis=0)
         microframe = right_pole - left_pole
         # note that this is cosine distance, not cosine similarity
+        
+        # TODO: could do this twice for two matrix sets
         c_w_f = fastdist.vector_to_matrix_distance(microframe, full_reps, fastdist.cosine, "cosine")
-        variances[pole] = np.var(c_w_f)
+#         variances[pole] = np.var(c_w_f) 
         scores[pole] = list(c_w_f)
 
-    with open(LOGS + 'semantics_mano/results/variances.json', 'w') as outfile: 
-        json.dump(variances, outfile)
+#     with open(LOGS + 'semantics_mano/results/variances.json', 'w') as outfile: 
+#         json.dump(variances, outfile)
         
     with open(LOGS + 'semantics_mano/results/scores.json', 'w') as outfile: 
         json.dump(scores, outfile)

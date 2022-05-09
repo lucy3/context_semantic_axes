@@ -41,7 +41,7 @@ Each script should be thoroughly commented.
 
 - `prep_embedding_data.py`: prep data for getting embeddings 
 - `reddit_forum_embeddings.py`: get embeddings for Reddit/forums
-- `apply_semantics.py`: Apply axes to Reddit and forum embeddings 
+- `apply_semantics.py`: apply axes to Reddit and forum embeddings 
 - `semantics_viz.ipynb`: visualizing semantics output 
 
 ### Deprecated
