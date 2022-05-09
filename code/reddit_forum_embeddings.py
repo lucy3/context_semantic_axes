@@ -165,8 +165,12 @@ def get_embeddings():
     res = {}
     for w in word_counts: 
         res[w] = list(word_reps[w] / word_counts[w])
+        
     with open(SEM_FOLDER + 'embed/' + args.dataset + '_' + args.subset + '.json', 'w') as outfile: 
         json.dump(res, outfile)
+        
+    with open(SEM_FOLDER + 'embed/' + args.dataset + '_' + args.subset + '_wordcounts.json', 'w') as outfile: 
+        json.dump(word_counts, outfile)
 
 def main(): 
     if 'reddit' == args.dataset: 
