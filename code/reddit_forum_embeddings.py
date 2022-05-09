@@ -7,7 +7,7 @@ ideology and year
 
 Example of use: 
 python reddit_forum_embeddings.py --dataset reddit --subset 2005
-python reddit_forum_embeddings.py --dataset reddit --preprocess
+python reddit_forum_embeddings.py --dataset forum --subset the_attraction
 """
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
 import argparse
