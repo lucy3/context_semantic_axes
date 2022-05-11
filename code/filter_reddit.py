@@ -334,10 +334,10 @@ def count_posts_per_subreddit():
 
     for f in os.listdir(IN_S):
         start = time.time() 
-        # check if path exists
+        filename = f.split('.')[0]
+        if os.path.isdir(DATA + 'all_reddit_post_counts/' + filename): continue # skip ones we already have
 
         unpack_file(IN_S, f)
-        filename = f.split('.')[0]
         data = sc.textFile(IN_S + filename) 
         data = data.filter(lambda line: not get_dumb_lines(line))
         sub_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
@@ -350,14 +350,24 @@ def count_posts_per_subreddit():
         print("TIME:", time.time() - start)
         
 def get_top_subreddits(): 
-    #count_posts_per_subreddit()
+    '''
+    count_posts_per_subreddit()
+    needs to be run before this function. 
+    
+    Then, each part-00000 file in DATA + 'all_reddit_post_counts/'
+    needs to be concatenated, and that file is called 'all_post_counts'
+    Then, we use spark to read in that file, map, and reduce by key, and write out
+    the top 1000 subreddits that do not start with 'u' (user). 
+    '''
+    pass # TODO TODO 
 
 def main(): 
     #check_duplicates_main()
     #extract_subreddits_main()
     #sample_reddit_control()
     #detect_bots()
-    get_top_subreddits()
+    count_posts_per_subreddit()
+    #get_top_subreddits()
     sc.stop()
 
 if __name__ == '__main__':

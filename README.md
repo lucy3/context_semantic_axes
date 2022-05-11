@@ -43,6 +43,7 @@ Each script should be thoroughly commented.
 - `reddit_forum_embeddings.py`: get embeddings for Reddit/forums
 - `apply_semantics.py`: apply axes to Reddit and forum embeddings 
 - `semantics_viz.ipynb`: visualizing semantics output 
+- `word_birth_spread.py`: functions for finding birthdates and spread of words outside the manosphere
 
 ### Deprecated
 Some scripts were written to experiment with things but they will not be included in the paper. 

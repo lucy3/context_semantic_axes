@@ -169,7 +169,7 @@ def get_forum_vocab(line, vocab=set()):
     year = date_time_str[0]
     month = date_time_str[1]
     date_month = year + '-' + month
-    text = d['text_post']
+    text = d['text_post'].lower()
     text = text.translate(str.maketrans(string.punctuation, ' ' * len(string.punctuation)))
     toks = text.split()
     unigrams = set(toks)
@@ -273,7 +273,8 @@ def main():
     conf = SparkConf()
     sc = SparkContext(conf=conf)
     find_word_birthdates_reddit()
-    find_word_birthdates_forum()
+    #find_word_birthdates_forum()
+    #get_overall_birthdateplace()
     sc.stop()
     
 
