@@ -21,8 +21,8 @@ from tqdm import tqdm
 import torch
 import numpy as np
 
-ROOT = '/global/scratch/users/lucy3_li/manosphere/'
-#ROOT = '/mnt/data0/lucy/manosphere/' 
+#ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
 CONTROL = ROOT + 'data/reddit_control/'

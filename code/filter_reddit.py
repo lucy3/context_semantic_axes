@@ -23,8 +23,7 @@ sc = SparkContext(conf=conf)
 IN_S = '/mnt/data0/corpora/reddit/submissions/'
 IN_C = '/mnt/data0/corpora/reddit/comments/'
 UD = '/mnt/data0/corpora/urban_dictionary/UD2019/Oct19/all_definitions.dat'
-#ROOT = '/mnt/data0/lucy/manosphere/'
-ROOT = '/data0/lucy/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 SUBS = ROOT + 'data/submissions/'
@@ -317,12 +316,48 @@ def detect_bots():
     with open(LOGS + 'reddit_bots.txt', 'w') as outfile: 
         for user in bot_users: 
             outfile.write(user + '\n')
+            
+def count_posts_per_subreddit(): 
+    '''
+    For the control dataset, we want to focus on
+    the top 1000 subreddits, based on post count. 
+    '''
+    # get subreddits that are in our dataset 
+    relevant_subs = set()
+    with open(DATA + 'subreddit_names.txt', 'r') as infile: 
+        for line in infile: 
+            name = line.strip().lower()
+            if name.startswith('/r/'): name = name[3:]
+            if name.startswith('r/'): name = name[2:]
+            if name.endswith('/'): name = name[:-1]
+            relevant_subs.add(name)
+
+    for f in os.listdir(IN_S):
+        start = time.time() 
+        # check if path exists
+
+        unpack_file(IN_S, f)
+        filename = f.split('.')[0]
+        data = sc.textFile(IN_S + filename) 
+        data = data.filter(lambda line: not get_dumb_lines(line))
+        sub_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
+                    json.loads(line)['subreddit'].lower() not in relevant_subs)
+        sub_data = sub_data.map(lambda line: (json.loads(line)['subreddit'].lower(), 1))
+        sub_data = sub_data.reduceByKey(lambda n1, n2: n1 + n2).map(lambda tup: tup[0] + ' ' + str(tup[1]))
+        sub_data.coalesce(1).saveAsTextFile(DATA + 'all_reddit_post_counts/' + filename)
+
+        pack_file(IN_S, f) 
+        print("TIME:", time.time() - start)
+        
+def get_top_subreddits(): 
+    #count_posts_per_subreddit()
 
 def main(): 
-    check_duplicates_main()
-    extract_subreddits_main()
-    sample_reddit_control()
-    detect_bots()
+    #check_duplicates_main()
+    #extract_subreddits_main()
+    #sample_reddit_control()
+    #detect_bots()
+    get_top_subreddits()
     sc.stop()
 
 if __name__ == '__main__':
