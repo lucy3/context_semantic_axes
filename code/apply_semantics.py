@@ -7,9 +7,8 @@ from scipy.spatial.distance import cosine
 import json
 import numpy as np
 from collections import Counter, defaultdict
-from sklearn.neighbors.kde import KernelDensity
 from fastdist import fastdist
-from helper import get_vocab
+from helpers import get_vocab
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -96,16 +95,6 @@ def project_onto_axes():
         
     with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'w') as outfile: 
         outfile.write('\n'.join(vocab_order))
-    
-def get_gender_corr(): 
-    with open(LOGS + 'semantics_mano/results/scores.json', 'r') as infile: 
-        scores = json.load(infile)
-        
-    vocab_order = []
-    with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'r') as infile:
-        vocab_order = infile.readlines()
-    
-    # TODO TODO TODO
 
 def get_high_variance(): 
     '''
@@ -151,7 +140,7 @@ def get_overall_embeddings():
     
     # go through reddit
     years = range(2008, 2020)
-    for y in tqdm(years): 
+    for y in tqdm(years):
         with open(EMBED_PATH + 'reddit_' + str(y) + '.json', 'r') as infile: 
             d = json.load(infile) # { term_category_year : vector }
         with open(EMBED_PATH + 'reddit_' + str(y) + '_wordcounts.json', 'r') as infile: 
@@ -167,7 +156,7 @@ def get_overall_embeddings():
             overall_vec[term] += vec
     forums = ['avfm', 'mgtow', 'incels', 'pua_forum', 'red_pill_talk', 'rooshv', 'the_attraction']
     # go through forum 
-    for f in forums: 
+    for f in tqdm(forums): 
         with open(EMBED_PATH + 'forum_' + f + '.json', 'r') as infile: 
             d = json.load(infile) # { term_category_year : vector }
         with open(EMBED_PATH + 'forum_' + f + '_wordcounts.json', 'r') as infile: 
@@ -188,8 +177,8 @@ def get_overall_embeddings():
         json.dump(overall_vec, outfile)
 
 def main(): 
-    get_overall_embeddings()
-    project_onto_axes()
+    #get_overall_embeddings()
+    #project_onto_axes()
     #get_gender_corr()
     #get_high_variance()
 

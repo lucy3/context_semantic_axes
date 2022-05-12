@@ -6,11 +6,13 @@ and forum_rel
 
 from pyspark import SparkConf, SparkContext
 from functools import partial
+import subprocess
 from helpers import get_vocab
 import string
 from nltk import ngrams
 import json
 import os
+import time
 
 IN_S = '/mnt/data0/corpora/reddit/submissions/'
 IN_C = '/mnt/data0/corpora/reddit/comments/'
@@ -21,6 +23,13 @@ SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 CONTROL = ROOT + 'data/reddit_control/'
+
+def get_dumb_lines(line): 
+    try: 
+        json.loads(line)
+    except json.decoder.JSONDecodeError:
+        return True
+    return False
 
 def month_year_iter(start, end):
     '''
@@ -70,7 +79,7 @@ def get_subreddit_vocab(line, vocab=set()):
     overlap = (unigrams & vocab) | (bigrams & vocab)
     ret = []
     for w in overlap: 
-        ret.append(w, [d['subreddit'].lower()])
+        ret.append((w, [d['subreddit'].lower()]))
     return ret
 
 def unpack_file(d, f):
@@ -95,7 +104,7 @@ def pack_file(d, f):
     p = subprocess.Popen(['rm', filename], cwd=d)
     p.wait()
 
-def find_word_birthdates_reddit(): 
+def find_word_birthdates_reddit(sc): 
     '''
     Searches through Reddit comments and submissions
     for the first post and community in which a vocab term is used 
@@ -203,7 +212,7 @@ def get_min_month(n1, n2):
         else: 
             return n2
         
-def find_word_birthdates_forum(): 
+def find_word_birthdates_forum(sc): 
     vocab = set(get_vocab())
     
     for filename in os.listdir(FORUMS):
@@ -272,8 +281,8 @@ def get_overall_birthdateplace():
 def main():
     conf = SparkConf()
     sc = SparkContext(conf=conf)
-    find_word_birthdates_reddit()
-    #find_word_birthdates_forum()
+    find_word_birthdates_reddit(sc)
+    #find_word_birthdates_forum(sc)
     #get_overall_birthdateplace()
     sc.stop()
     
