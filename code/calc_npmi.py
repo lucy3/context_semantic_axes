@@ -18,7 +18,7 @@ import numpy as np
 import math
 import sys
 
-ROOT = '/mnt/data0/lucy/manosphere/'
+ROOT = '/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
