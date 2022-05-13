@@ -145,7 +145,57 @@ def get_overall_embeddings():
     with open(AGG_EMBED_PATH + 'mano_overall.json', 'w') as outfile: 
         json.dump(overall_vec, outfile)
         
+def get_yearly_embeddings(): 
+    '''
+    Reaggregates based on per-year, per-community/platform
+    embeddings and their counts
+    This way each vocab word has one embedding. 
+    '''
+    total_count = Counter() # {term + year : count}
+    overall_vec = {}
+    
+    # go through reddit
+    years = range(2008, 2020)
+    for y in tqdm(years):
+        with open(EMBED_PATH + 'reddit_' + str(y) + '.json', 'r') as infile: 
+            d = json.load(infile) # { term_category_year : vector }
+        with open(EMBED_PATH + 'reddit_' + str(y) + '_wordcounts.json', 'r') as infile: 
+            word_counts = json.load(infile)
+        for key in sorted(d.keys()): 
+            count = word_counts[key]
+            parts = key.split('_')
+            term = parts[0]
+            vec = np.array(d[key])*count
+            total_count[term + '_' + str(y)] += count
+            if term not in overall_vec: 
+                overall_vec[term + '_' + str(y)] = np.zeros(3072)
+            overall_vec[term + '_' + str(y)] += vec
+    forums = ['avfm', 'mgtow', 'incels', 'pua_forum', 'red_pill_talk', 'rooshv', 'the_attraction']
+    # go through forum 
+    for f in tqdm(forums): 
+        with open(EMBED_PATH + 'forum_' + f + '.json', 'r') as infile: 
+            d = json.load(infile) # { term_category_year : vector }
+        with open(EMBED_PATH + 'forum_' + f + '_wordcounts.json', 'r') as infile: 
+            word_counts = json.load(infile)
+        for key in sorted(d.keys()): 
+            count = word_counts[key]
+            parts = key.split('_')
+            term = parts[0]
+            vec = np.array(d[key])*count
+            total_count[term + '_' + str(y)] += count
+            if term not in overall_vec: 
+                overall_vec[term + '_' + str(y)] = np.zeros(3072)
+            overall_vec[term + '_' + str(y)] += vec
+    
+    for term in overall_vec: 
+        overall_vec[term] = list(overall_vec[term] / total_count[term]) 
+    with open(AGG_EMBED_PATH + 'mano_monthly.json', 'w') as outfile: 
+        json.dump(overall_vec, outfile)
+        
 def pca_experiment(): 
+    '''
+    This is not used (but slightly interesting).
+    '''
     print("getting axes...")
     axes, axes_vocab = load_wordnet_axes()
     # synset : (right_vec, left_vec)
@@ -215,8 +265,8 @@ def pca_experiment():
 
 def main(): 
     #get_overall_embeddings()
+    get_yearly_embeddings()
     #project_onto_axes()
-    pca_experiment()
 
 if __name__ == '__main__':
     main()
