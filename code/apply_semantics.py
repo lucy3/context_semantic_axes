@@ -18,7 +18,7 @@ LOGS = ROOT + 'logs/'
 EMBED_PATH = LOGS + 'semantics_mano/embed/'
 AGG_EMBED_PATH = LOGS + 'semantics_mano/agg_embed/'
 
-def load_manosphere_vecs(): 
+def load_manosphere_vecs(inpath): 
     '''
     Load z-scored embeddings for each vocabulary term
     '''
@@ -27,7 +27,7 @@ def load_manosphere_vecs():
     
     vocab_order = []
     full_reps = []
-    with open(AGG_EMBED_PATH + 'mano_overall.json', 'r') as infile: 
+    with open(inpath, 'r') as infile: 
         d = json.load(infile) # {term : vector}
     for term in sorted(d.keys()): 
         standard_vec = (np.array(d[term]) - bert_mean) / bert_std
@@ -77,7 +77,7 @@ def project_onto_axes():
     good_axes = get_good_axes()
     
     print("getting word vectors...")
-    full_reps, vocab_order = load_manosphere_vecs()
+    full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_overall.json')
     
     print("calculating bias of every word to every axis...")
     variances = Counter()
@@ -96,6 +96,41 @@ def project_onto_axes():
         json.dump(scores, outfile)
         
     with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'w') as outfile: 
+        outfile.write('\n'.join(vocab_order))
+        
+def project_onto_specific_axes(): 
+    axes_of_interest = ['beautiful.a.01', 'lovable.a.01', 'attractive.a.01',
+                       'educated.a.01', 'intellectual.a.02', 
+                       'old.a.02', 'old.a.01', 
+                       'prejudiced.a.02', 'heavy.a.04', 'clean.a.01']
+    
+    print("getting axes...")
+    axes, axes_vocab = load_wordnet_axes()
+    # synset : (right_vec, left_vec)
+    adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
+    good_axes = get_good_axes()
+    
+    print("getting word vectors...")
+    full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_yearly.json')
+    
+    print("calculating bias of every word to specific axes...")
+    variances = Counter()
+    scores = defaultdict(list) 
+    for pole in tqdm(adj_poles): 
+        if pole not in axes_of_interest: continue # skip most of them, speeds up calculation
+        if pole not in good_axes: continue
+        left_vecs, right_vecs = adj_poles[pole]
+        left_pole = left_vecs.mean(axis=0)
+        right_pole = right_vecs.mean(axis=0)
+        microframe = right_pole - left_pole
+        # note that this is cosine distance, not cosine similarity
+        c_w_f = fastdist.vector_to_matrix_distance(microframe, full_reps, fastdist.cosine, "cosine")
+        scores[pole] = list(c_w_f)
+        
+    with open(LOGS + 'semantics_mano/results/specific_scores.json', 'w') as outfile: 
+        json.dump(scores, outfile)
+        
+    with open(LOGS + 'semantics_mano/results/specific_vocab_order.txt', 'w') as outfile: 
         outfile.write('\n'.join(vocab_order))
             
 def get_overall_embeddings(): 
@@ -265,7 +300,7 @@ def pca_experiment():
 
 def main(): 
     #get_overall_embeddings()
-    get_yearly_embeddings()
+    #get_yearly_embeddings()
     #project_onto_axes()
 
 if __name__ == '__main__':
