@@ -9,6 +9,8 @@ import numpy as np
 from collections import Counter, defaultdict
 from fastdist import fastdist
 from helpers import get_vocab
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -95,39 +97,6 @@ def project_onto_axes():
         
     with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'w') as outfile: 
         outfile.write('\n'.join(vocab_order))
-
-def get_high_variance(): 
-    '''
-    TODO: separate out by gender 
-    '''
-    with open(LOGS + 'semantics_mano/results/scores.json', 'r') as infile: 
-        scores = json.load(infile)
-        
-    vocab_order = []
-    with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'r') as infile:
-        vocab_order = infile.readlines()
-        
-    # TODO: create two masks where indices in vocab_order correspond to masc / fem words
-    # and then get variance only over those indices 
-        
-    variances = Counter()
-    for pole in scores: 
-        variances[pole] = np.var(scores[pole]) # TODO: get variance over masc, then over fem words
-        
-    N = 10
-    with open(LOGS + 'semantics_mano/results/top_and_bottom_words.txt', 'w') as outfile: 
-        for tup in variances.most_common(20): 
-            pole = tup[0]
-            var = tup[1]
-            outfile.write(pole + ' ' + str(var) + '\n')
-            score_list = scores[pole]
-            indices = np.argpartition(score_list, -N)[-N:]
-            topN = [vocab_order[idx].strip() for idx in indices]
-            outfile.write(', '.join(topN) + '\n')
-            indices = np.argpartition(score_list, N)[:N]
-            bottomN = [vocab_order[idx].strip() for idx in indices]
-            outfile.write(', '.join(bottomN) + '\n')
-            outfile.write('\n')
             
 def get_overall_embeddings(): 
     '''
@@ -175,12 +144,79 @@ def get_overall_embeddings():
         overall_vec[term] = list(overall_vec[term] / total_count[term]) 
     with open(AGG_EMBED_PATH + 'mano_overall.json', 'w') as outfile: 
         json.dump(overall_vec, outfile)
+        
+def pca_experiment(): 
+    print("getting axes...")
+    axes, axes_vocab = load_wordnet_axes()
+    # synset : (right_vec, left_vec)
+    adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
+    good_axes = get_good_axes()
+    
+    print("getting word vectors...")
+    full_reps, vocab_order = load_manosphere_vecs()
+    
+    with open(LOGS + 'coref_results/mano_gender_labels.json', 'r') as infile: 
+        gender_labels = json.load(infile)
+    
+    fem_reps = []
+    masc_reps = []
+    for i, term in enumerate(vocab_order): 
+        if term not in gender_labels: continue
+        if gender_labels[term] > 0.75: 
+            fem_reps.append(full_reps[i])
+        elif gender_labels[term] < 0.25: 
+            masc_reps.append(full_reps[i])
+    fem_reps = np.array(fem_reps)
+    masc_reps = np.array(masc_reps)
+    
+    print("applying PCA transformation on manosphere vecs") 
+    pca_masc = PCA()
+    scaler_masc = StandardScaler()
+    scaler_masc.fit(masc_reps)
+    masc_reps = scaler_masc.transform(masc_reps)
+    pca_masc.fit(masc_reps)
+    new_masc_reps = pca_masc.transform(masc_reps)
+    np.save(AGG_EMBED_PATH + 'pca_mano_masc.npy', new_masc_reps)
+    
+    pca_fem = PCA()
+    scaler_fem = StandardScaler()
+    scaler_fem.fit(fem_reps)
+    fem_reps = scaler_fem.transform(fem_reps)
+    pca_fem.fit(fem_reps)
+    new_fem_reps = pca_fem.transform(fem_reps)
+    np.save(AGG_EMBED_PATH + 'pca_mano_fem.npy', new_fem_reps)
+    
+    print("applying PCA transformation on poles")
+    variances = Counter()
+    scores = defaultdict(list) 
+    fem_ret = {} # {pole: [new_left, new_right]}
+    masc_ret = {} # {pole: [new_left, new_right]}
+    for pole in tqdm(adj_poles): 
+        if pole not in good_axes: continue
+        left_vecs, right_vecs = adj_poles[pole]
+        left_pole = left_vecs.mean(axis=0).reshape(1, -1)
+        right_pole = right_vecs.mean(axis=0).reshape(1, -1)
+        
+        scaled_left = scaler_fem.transform(left_pole)
+        scaled_right = scaler_fem.transform(right_pole)
+        new_left = pca_fem.transform(scaled_left).flatten()
+        new_right = pca_fem.transform(scaled_right).flatten()
+        fem_ret[pole] = [list(new_left), list(new_right)]
+        
+        scaled_left = scaler_masc.transform(left_pole)
+        scaled_right = scaler_masc.transform(right_pole)
+        new_left = pca_masc.transform(scaled_left).flatten()
+        new_right = pca_masc.transform(scaled_right).flatten()
+        masc_ret[pole] = [list(new_left), list(new_right)]
+    with open(LOGS + 'semantics_mano/pca_fem_poles.json', 'w') as outfile: 
+        json.dump(fem_ret, outfile)
+    with open(LOGS + 'semantics_mano/pca_masc_poles.json', 'w') as outfile: 
+        json.dump(masc_ret, outfile)
 
 def main(): 
     #get_overall_embeddings()
     #project_onto_axes()
-    #get_gender_corr()
-    #get_high_variance()
+    pca_experiment()
 
 if __name__ == '__main__':
     main()
