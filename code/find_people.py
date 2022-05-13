@@ -1,5 +1,9 @@
 """
-Various helper functions
+Various helper functions for handling
+glossary words, and supporting
+manual annotation of NER-detected words, such
+as creating the initial spreadsheet and
+printing examples of unknown words. 
 """
 import csv
 from collections import Counter, defaultdict
@@ -29,6 +33,12 @@ UD = LOGS + 'urban_dict.csv'
 WORD_COUNT_DIR = LOGS + 'gram_counts/'
 
 def get_manual_nonpeople(): 
+    '''
+    This is the list of words in community glossaries 
+    that are not labeled as people. 
+    
+    This function does not seem to be used anywhere. 
+    '''
     words = set()
     with open(NONPEOPLE_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -40,28 +50,11 @@ def get_manual_nonpeople():
                     words.add(word.lower())
     return words
 
-def calculate_ud_coverage(): 
-    """
-    see how many common nouns for people turn up in urban dictionary
-    """
-    people, sing2plural = get_manual_people()
-    num_definitions = Counter()
-    with open(UD, 'r') as infile: 
-        for line in infile: 
-            contents = line.strip().split('|')
-            word = contents[0].lower()
-            if word in people: 
-                num_definitions[word] += 1
-    missing_count = 0
-    for w in sing2plural: 
-        if num_definitions[w] == 0: 
-            if num_definitions[sing2plural[w]] == 0: 
-                missing_count += 1
-    print("Total number of people:", len(sing2plural))
-    print("Missing:", missing_count)
-    print("Number of definitions:", num_definitions.values())
-
 def count_glossword_time_place(): 
+    '''
+    This outputs a csv that tracks the prevelence 
+    of glossary words over time. 
+    '''
     all_terms, _ = get_manual_people()
     conf = SparkConf()
     sc = SparkContext(conf=conf)
@@ -93,6 +86,9 @@ def get_ngrams_glosswords():
     print(num_tokens[5], num_tokens[4], num_tokens[3])
 
 def load_gram_counts(categories, sqlContext): 
+    '''
+    Load the output of gram_counting.py
+    '''
     reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
     leave_out = []
     for sr in categories: 
@@ -106,6 +102,14 @@ def load_gram_counts(categories, sqlContext):
 
 def update_tagged_counts(line, i, categories, tokenizer, deps, depheads, tagged_counts, 
                        prefix_counts, reddit=True): 
+    '''
+    Helper function for count_tagged_entities()
+    If the first token in a phrase is a determiner or possessive for the head 
+    of the phrase, we leave it out. 
+    Then, if the rest of the phrase is a bigram or unigram, we include it
+    in our tagged counts (with NER label), and also keep track of the det/poss
+    that are attached to it. 
+    '''
     content = line.split('\t')
     entities = content[1:]
     if reddit: 
@@ -124,8 +128,8 @@ def update_tagged_counts(line, i, categories, tokenizer, deps, depheads, tagged_
         phrase = tokenizer.tokenize(phrase)
  
         phrase_start = 0 
-        deprel = deps[str(i)][tup[1]]
-        dephead = depheads[str(i)][tup[1]]
+        deprel = deps[str(i)][tup[1]] # get rel of start token
+        dephead = depheads[str(i)][tup[1]] # get head of start token
         det_poss = ''
         if (deprel == 'poss' or deprel == 'det') and dephead == head: 
             det_poss = phrase[0]
@@ -141,7 +145,11 @@ def update_tagged_counts(line, i, categories, tokenizer, deps, depheads, tagged_
 def count_tagged_entities(): 
     '''
     Gather tagged entity unigrams and bigrams
-    that we would want to include in our analysis 
+    that we would want to include in our analysis. 
+    This reads in the output of NER tagging and dependency parsing: 
+    - *_deps.json: {linenum : {idx : deprel} } 
+    - *_depheads.json: {linenum : {idx : head idx} }
+    - tagged_people: tab-delimited file of entity type, start, end, head idx, entity phrase
     '''
     # look at tagged entities 
     tagged_counts = defaultdict(Counter) # { entity : {proper noun : count, common noun: count} }
@@ -184,6 +192,13 @@ def count_tagged_entities():
         json.dump(prefix_counts, outfile)
     
 def get_significant_entities(): 
+    '''
+    Our filter for "significant entities"
+    is the word needs to be popular (occur at least 500 times
+    in reddit_rel and forum_rel), and at least 20% of its
+    instances in the dataset should be tagged by the NER model
+    as a person to avoid ambiguity. 
+    '''
     # load tagged counts    
     inpath = WORD_COUNT_DIR + 'tagged_counts_full.json'
     with open(inpath, 'r') as infile: 
@@ -211,7 +226,7 @@ def get_significant_entities():
         # the word needs to be popular
         if all_counts[gram] < 500: continue
         tagged_total = sum(tagged_counts[gram].values())
-        # at least half of its instances should be people to avoid ambiguity
+        # at least 20% of its instances should be people to avoid ambiguity
         if tagged_total < (all_counts[gram] / 5): continue
         gram_len = len(gram.split(' '))
         assert gram_len < 3 and gram_len > 0
@@ -242,6 +257,11 @@ def get_significant_entities():
             writer.writerow(d)
             
 def test_lemmatizer(): 
+    '''
+    This just investigates if we can automate
+    going from plural to singular with a stemmer. 
+    This doesn't really work... 
+    '''
     import spacy
     
     spacy_nlp = spacy.load("en_core_web_sm")
@@ -287,7 +307,8 @@ def find_examples(w, outfile):
 def write_out_examples(): 
     '''
     This function prints out examples of some
-    unknown terms being used on Reddit 
+    unknown terms being used on Reddit, 
+    to help with manual annotation. 
     '''
     questionable = set()
     with open(ROOT + 'data/ann_sig_entities.csv', 'r') as csvfile:
@@ -301,14 +322,15 @@ def write_out_examples():
             outfile.write('----------------\n')
             find_examples(' ' + w + ' ', outfile)
 
-def main(): 
+def main():
     #count_glosswords_in_tags()
     #get_ngrams_glosswords()
     #test_lemmatizer()
     #get_significant_entities()
     #count_tagged_entities()
     #count_glossword_time_place()
-    write_out_examples()
+    #write_out_examples()
+    pass
 
 if __name__ == '__main__':
     main()

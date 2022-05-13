@@ -9,7 +9,6 @@ import requests
 import json
 import copy
 from tqdm import tqdm
-import wikitextparser as wtp
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
 from functools import partial
 from collections import Counter, defaultdict
@@ -17,6 +16,7 @@ import random
 import torch
 import numpy as np
 import math
+import sys
 
 ROOT = '/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -35,8 +35,9 @@ def get_coocur_counts(line, tokenizer=None, lines_adj=None):
     contents = line.split('\t')
     line_num = contents[0]
     words_in_line = lines_adj[line_num]
-    text = '\t'.join(contents[1:])
-    text = wtp.remove_markup(text).lower()
+    text = '\t'.join(contents[1:]).lower()
+    # account for dashed words
+    text = text.replace('-', 'xqxq')
     tokens = tokenizer.tokenize(text)
     counts = Counter(tokens)
     ret = []
@@ -51,7 +52,6 @@ def get_adj_word_counts():
     '''
     Input: wikipedia data
     Output: {adj : { w : total count in that adj's lines} }
-    This could be rewritten using Spark to speed it up. 
     '''
     from pyspark import SparkConf, SparkContext
     from pyspark.sql import Row, SQLContext
@@ -63,7 +63,7 @@ def get_adj_word_counts():
     lines_adj = defaultdict(list) # {line ID: [adj]}
     for adj in adj_lines: 
         for line in adj_lines[adj]: 
-            lines_adj[str(line)].append(adj)
+            lines_adj[str(line)].append(adj.replace('-', 'xqxq'))
         
     btokenizer = BasicTokenizer(do_lower_case=True)
     wikipedia_file = LOGS + 'wikipedia/adj_data/part-00000'
@@ -77,6 +77,9 @@ def get_adj_word_counts():
     sc.stop()
         
 def npmi_helper(totals_synset, l_counts, r_counts): 
+    if (l_counts + r_counts) < 5: 
+        # disregard rare words 
+        return (0, 0)
     # p(w) = count of w in both axes / total count in both axes
     p_w = (l_counts + r_counts) / totals_synset['both']
     # left npmi
@@ -97,6 +100,19 @@ def npmi_helper(totals_synset, l_counts, r_counts):
         npmi_right = pmi_right / h_right
     return npmi_left, npmi_right
 
+def get_axes_adj(): 
+    # full axes' adj { axes : (list1, list2) } 
+    axes_adj = defaultdict(tuple) 
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t') 
+            if len(contents) < 3: continue # no antonyms
+            synset = contents[0]
+            axis1 = contents[1].split(',')
+            axis2 = contents[2].split(',')
+            axes_adj[synset] = (axis1, axis2)
+    return axes_adj
+
 def get_npmi_axes_contexts(): 
     '''
     For each axes, gets word co-occurrence counts with each adj 
@@ -106,24 +122,17 @@ def get_npmi_axes_contexts():
     with open(LOGS + 'wikipedia/adj_coocur_counts.json', 'r') as infile: 
         adj_coocur_counts = defaultdict(Counter, json.load(infile)) # {adj : { w : total count }}
         
-    axes_adj = defaultdict(tuple) # full axes' adj { axes : (list1, list2) } 
-    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
-        for line in infile: 
-            contents = line.strip().split('\t') 
-            if len(contents) < 3: continue # no antonyms
-            synset = contents[0]
-            axis1 = contents[1].split(',')
-            axis2 = contents[2].split(',')
-            axes_adj[synset] = (axis1, axis2)
+    axes_adj = get_axes_adj() # full axes' adj { axes : (list1, list2) } 
     
     for synset in tqdm(axes_adj): 
+        if synset != 'educated.a.01': continue # TODO: delete
         left, right = axes_adj[synset]
         left_counts = Counter()
         for adj in left: 
-            left_counts += adj_coocur_counts[adj]
+            left_counts += adj_coocur_counts[adj.replace('-', 'xqxq')]
         right_counts = Counter()
         for adj in right: 
-            right_counts += adj_coocur_counts[adj]
+            right_counts += adj_coocur_counts[adj.replace('-', 'xqxq')]
         totals = Counter() # {'1': total, '2': total, 'both': total}
         totals['1'] = sum(left_counts.values())
         totals['2'] = sum(right_counts.values())
@@ -163,33 +172,109 @@ def get_npmi_axes_contexts():
             json.dump(npmi_scores, outfile)
         
 def get_high_npmi_lines(): 
-    pass
-#         left_lines = set()
-#         for adj in left: 
-#             left_lines.update(adj_lines[adj])
-#         left_scores = Counter()
-#         for lineID in left_lines: 
-#             text = # TODO: get text of line
-#             tokens = tokenize(text) # TODO this outside of the loop
-#             score = []
-#             for tok in tokens: 
-#                 score.append(npmi_scores['N/A'][tok][0])
-#             score = np.mean(score)
-#             left_scores[lineID] = score
-        
-            
-#         right_lines = set()
-#         for adj in right: 
-#             right_lines.update(adj_lines[adj])
+    '''
+    This function was ABANDONED because the npmi
+    scores were not helpful. 
+    '''
+    file_name = 'violent.a.01.json'
+    npmi_scores_file = LOGS + 'wikipedia/npmi_scores/' + file_name
+    btokenizer = BasicTokenizer(do_lower_case=True)
     
-    # for each adj: subtract counts for each adj from full axes counts, calculate npmi
-
+    with open(npmi_scores_file, 'r') as infile: 
+        npmi_scores = json.load(infile)
+        
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+        adj_lines = json.load(infile) # {adj : [line IDs]}
+        
+    this_synset = file_name.replace('.json', '')
+    with open(LOGS + 'semantics_val/wordnet_axes.txt', 'r') as infile: 
+        for line in infile: 
+            contents = line.strip().split('\t') 
+            if len(contents) < 3: continue # no antonyms
+            synset = contents[0]
+            if synset == this_synset: 
+                axis_left = contents[1].split(',')
+                axis_right = contents[2].split(',')
+    
+    # get lines to create two corpora
+    corpora_left = set()
+    for adj in axis_left: 
+        adj = adj.replace('-', 'xqxq')
+        corpora_left.update(adj_lines[adj])
+    corpora_right = set()
+    for adj in axis_right: 
+        adj = adj.replace('-', 'xqxq')
+        corpora_right.update(adj_lines[adj])
+    
+    # calculate npmi for full set of sentences 
+    full_scores = npmi_scores['N/A'] 
+    left_line_scores = Counter()
+    right_line_scores = Counter()
+    lines2tokens = {}
+    wikipedia_file = LOGS + 'wikipedia/adj_data/part-00000' # TODO: change to adj_data
+    with open(wikipedia_file, 'r') as infile: 
+        for line in infile: 
+            contents = line.split('\t') 
+            line_ID = int(contents[0])
+            if line_ID not in corpora_left and line_ID not in corpora_right: 
+                continue
+            text = '\t'.join(contents[1:]).replace('-', 'xqxq').lower()
+            tokens = btokenizer.tokenize(text)
+            lines2tokens[line_ID] = tokens
+            if line_ID in corpora_left: 
+                # TODO: get scores for loov, excluding lines associated with that adj
+                scores = [full_scores[t][0] for t in tokens if (t in full_scores and full_scores[t] != [0, 0])] # TODO: remove if statement
+                left_line_scores[line_ID] = np.mean(scores)
+            if line_ID in corpora_right: 
+                scores = [full_scores[t][1] for t in tokens if (t in full_scores and full_scores[t] != [0, 0])] # TODO: remove if statement
+                right_line_scores[line_ID] = np.mean(scores)
+            
+    top_left = left_line_scores.most_common(100)
+    top_right = right_line_scores.most_common(100)
+    for i, tup in enumerate(top_left): 
+        print("LEFT", tup[1], tup[0], lines2tokens[tup[0]])
+        if i > 10: break
+            
+    for i, tup in enumerate(top_right): 
+        print("RIGHT", tup[1], tup[0], lines2tokens[tup[0]])
+        if i > 10: break
+        
     # for line on each axes side, taking account adj left out: calculate average npmi. {(line ID, adj) : average npmi}
     # keep only top 100 line ID for each side, save as {line ID: [(adj, axes)]}
+    # for left out vector use the representation based on random contexts from earlier 
+    
+def inspect_npmi_scores(): 
+    '''
+    Examine npmi scores for different antonym pairs
+    '''
+    filenames = ['friendly.a.01.json', 'educated.a.01.json', 
+                 'violent.a.01.json', 'favorable.a.01.json', 'colorful.a.01.json', 
+                 'desirable.a.01.json']
+    
+    for filename in filenames: 
+        npmi_scores_file = LOGS + 'wikipedia/npmi_scores/' + filename
+        print(filename)
+    
+        with open(npmi_scores_file, 'r') as infile: 
+            npmi_scores = json.load(infile)
+            
+        full_scores = npmi_scores['N/A'] 
+        left_scores = Counter()
+        for w in full_scores: 
+            left_scores[w] = full_scores[w][0]
+        print(left_scores.most_common(20))
+        print()
+        right_scores = Counter()
+        for w in full_scores: 
+            right_scores[w] = full_scores[w][1]
+        print(right_scores.most_common(20))
+        print()
     
 def main(): 
     #get_adj_word_counts()
-    get_npmi_axes_contexts()
+    #get_npmi_axes_contexts()
+    get_high_npmi_lines()
+    #inspect_npmi_scores()
     
 if __name__ == '__main__':
     main()

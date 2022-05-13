@@ -1,3 +1,9 @@
+'''
+This script does the following: 
+- produce post and comment counts per month in jsons
+- produce unigram and bigram parquets for all three discussion datasets
+'''
+
 from transformers import BasicTokenizer
 import sys
 import json 
@@ -6,6 +12,7 @@ from pyspark import SparkConf, SparkContext
 from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import Row, SQLContext
 from functools import partial
+from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set, get_sr_cats
 import os
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
@@ -42,6 +49,9 @@ def get_num_comments():
     sc.stop()
     
 def get_num_posts(): 
+    '''
+    Get the number of posts per subreddit per month
+    '''
     sr_month = defaultdict(Counter)
     for filename in tqdm(os.listdir(SUBS)): 
         if filename == 'bad_jsons': continue
@@ -58,21 +68,6 @@ def get_num_posts():
     with open(LOGS + 'submission_counts.json', 'w') as outfile:
         json.dump(sr_month, outfile)
 
-def check_valid_comment(line): 
-    '''
-    For Reddit comments
-    '''
-    comment = json.loads(line)
-    return 'body' in comment and comment['body'].strip() != '[deleted]' \
-            and comment['body'].strip() != '[removed]'
-
-def check_valid_post(line): 
-    '''
-    For Reddit posts
-    '''
-    d = json.loads(line)
-    return 'selftext' in d
-
 def get_n_gramlist(nngramlist, toks, sr, n=2):   
     # stack overflow said this was fastest
     for s in ngrams(toks,n=n):        
@@ -81,7 +76,7 @@ def get_n_gramlist(nngramlist, toks, sr, n=2):
 
 def get_ngrams_comment(line, tokenizer=None, per_comment=True): 
     '''
-    Reddit comment
+    Bigrams and unigrams in Reddit comment
     '''
     d = json.loads(line)
     sr = d['subreddit'].lower()
@@ -94,7 +89,7 @@ def get_ngrams_comment(line, tokenizer=None, per_comment=True):
 
 def get_ngrams_post(line, tokenizer=None, per_comment=True): 
     '''
-    Reddit post
+    Bigrams and unigrams in Reddit comment
     '''
     d = json.loads(line)
     all_grams = set()
@@ -106,18 +101,10 @@ def get_ngrams_post(line, tokenizer=None, per_comment=True):
         all_grams = list(set(all_grams))
     return all_grams
 
-def get_bot_set(): 
-    bots = set()
-    with open(ROOT + 'logs/reddit_bots.txt', 'r') as infile: 
-        for line in infile: 
-            bots.add(line.strip())
-    return bots
-    
-def remove_bots(line, bot_set=set()): 
-    d = json.loads(line)
-    return 'author' in d and d['author'] not in bot_set
-
 def count_sr(per_comment=True): 
+    '''
+    Creates parquet for unigrams and bigrams in Reddit data 
+    '''
     bots = get_bot_set()
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
@@ -160,6 +147,7 @@ def count_sr(per_comment=True):
     
 def count_control(per_comment=True):
     '''
+    Creates parquet for unigrams and bigrams in Reddit control
     @inputs: 
     - per_comment: flag, where if False, counts all instances of a word 
     in a comment, otherwise if True, counts each word just once per comment
@@ -201,6 +189,9 @@ def count_control(per_comment=True):
     df.write.mode('overwrite').parquet(outpath)   
     
 def get_ngrams_comment_forum(line, tokenizer=None, per_comment=True): 
+    '''
+    Gets bigrams and unigrams for forum
+    '''
     d = json.loads(line)
     if d['date_post'] is None: 
         year = "None"
@@ -222,6 +213,8 @@ def count_forum(per_comment=True):
     We attach "FORUM_" the beginning of the community name
     to avoid incels the forum and incels the subreddit from clashing
     later when we combine dataframes. 
+    
+    Creates parquet for unigrams and bigrams in forums
     '''
     tokenizer = BasicTokenizer(do_lower_case=True)
     schema = StructType([
@@ -244,13 +237,46 @@ def count_forum(per_comment=True):
     else: 
         outpath = WORD_COUNT_DIR + 'forum_counts'
     df.write.mode('overwrite').parquet(outpath)
+    
+def get_total_tokens(): 
+    '''
+    Sum up unigrams for each dataset 
+    '''
+    outfile = open(WORD_COUNT_DIR + 'total_unigram_counts.txt', 'w')
+    categories = get_sr_cats()
+    reddit_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'subreddit_counts')
+    leave_out = []
+    for sr in categories: 
+        if categories[sr] == 'Health' or categories[sr] == 'Criticism': 
+            leave_out.append(sr)
+    reddit_df = reddit_df.filter(~reddit_df.community.isin(leave_out))
+    unigrams = reddit_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    # map to month : total
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('reddit_rel:' + str(um_totals) + '\n')
+    
+    forum_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'forum_counts')
+    unigrams = forum_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('forum_rel:' + str(um_totals) + '\n')
+    
+    control_df = sqlContext.read.parquet(WORD_COUNT_DIR + 'control_counts')
+    unigrams = control_df.rdd.filter(lambda x: len(x[0].split(' ')) == 1)
+    um_totals = unigrams.map(lambda x: (x[3], x[1])).reduceByKey(lambda x,y: x + y).collectAsMap()
+    um_totals = sum(list(um_totals.values()))
+    outfile.write('control:' + str(um_totals) + '\n')
+    outfile.close()
 
 def main(): 
-    count_control(per_comment=False)
-    count_sr(per_comment=False)
-    count_control()
-    count_sr()
-    #count_forum()
+#     count_control(per_comment=False)
+#     count_sr(per_comment=False)
+#     count_forum(per_comment=False)
+#     count_control()
+#     count_sr()
+#     count_forum()
+    get_total_tokens()
     sc.stop()
 
 if __name__ == "__main__":

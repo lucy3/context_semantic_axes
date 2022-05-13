@@ -1,10 +1,18 @@
+'''
+This file downloads submissions and posts
+from Pushshift website html, and
+then checks that all months are covered. 
+'''
+
 from bs4 import BeautifulSoup
 import wget
 import os
 from collections import Counter
 
+# html of pushshift website
 S_INPUT = '/mnt/data0/lucy/manosphere/data/submissions.txt'
 C_INPUT = '/mnt/data0/lucy/manosphere/data/comments.txt'
+# folders of downloaded files
 OUT_S = '/mnt/data0/corpora/reddit/submissions/'
 OUT_C = '/mnt/data0/corpora/reddit/comments/'
 CLEANED_S = '/mnt/data0/lucy/manosphere/data/submissions/'
@@ -23,6 +31,10 @@ def get_submissions():
         filename = wget.download(full_link, out=OUT_S)
         
 def check_files(d): 
+    '''
+    Check that we have exactly one copy of each month,
+    and if there are duplicates or missing ones, print it out. 
+    '''
     months = Counter()
     num_files = 0
     for filename in os.listdir(d): 
@@ -58,12 +70,13 @@ def get_comments():
             filename = wget.download(full_link, out=OUT_C)
 
 def main(): 
-    #get_submissions()
-    #check_files(OUT_S)
-    #print()
-    #get_comments()
-    #check_files(OUT_C)
-    check_files(CLEANED_S)
+    get_submissions()
+    check_files(OUT_S)
+    print()
+    get_comments()
+    check_files(OUT_C)
+    # check for filtered submissions
+    check_files(CLEANED_S) 
 
 if __name__ == '__main__':
     main()

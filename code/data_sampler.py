@@ -27,6 +27,9 @@ GLOSSWORD_OUT = LOGS + 'glossword_sample'
 PEOPLE_FILE = ROOT + 'data/people.csv'
 
 def sample_reddit(): 
+    '''
+    For NER evaluation, k = 25
+    '''
     categories = get_sr_cats()
     k = 25
     samples = defaultdict(list) # {cat: [25 comments]}
@@ -71,13 +74,16 @@ def sample_reddit():
                         samples[cat][idx] = (line_number, month, sr, text)
                 line_number += 1
         
-    with open(REDDIT_OUT, 'w') as outfile: 
+    with open(REDDIT_OUT + '_' + str(k), 'w') as outfile: 
         writer = csv.writer(outfile, delimiter='\t')
         for cat in samples: 
             for tup in samples[cat]: 
                 writer.writerow([cat, str(tup[0]), tup[1], tup[2], tup[3]])
 
 def sample_forums(): 
+    '''
+    For NER evaluation, k = 25
+    '''
     k = 25
     samples = defaultdict(list)
     forum_count = Counter()
@@ -96,7 +102,7 @@ def sample_forums():
                     if idx < k: 
                         samples[f][idx] = (line_number, f, text)
                 line_number += 1
-    with open(FORUM_OUT, 'w') as outfile: 
+    with open(FORUM_OUT + '_' + str(k), 'w') as outfile: 
         writer = csv.writer(outfile, delimiter='\t')
         for f in samples: 
             for tup in samples[f]: 
@@ -106,6 +112,9 @@ def sample_by_glossword():
     '''
     Get 2 sentences per glossary word
     For words with both singular and plural forms
+    
+    We do not use this because it produces too many examples
+    for human to go through. 
     '''
     all_words, _ = get_manual_people()
     categories = get_sr_cats()
@@ -190,9 +199,8 @@ def sample_by_glossword():
                 writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
 
 def main(): 
-    #sample_reddit()
-    #sample_forums()
-    #sample_by_glossword()
+    sample_reddit()
+    sample_forums()
 
 if __name__ == '__main__':
     main()
