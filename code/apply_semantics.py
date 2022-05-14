@@ -11,6 +11,7 @@ from fastdist import fastdist
 from helpers import get_vocab
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+import pandas as pd
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -80,7 +81,6 @@ def project_onto_axes():
     full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_overall.json')
     
     print("calculating bias of every word to every axis...")
-    variances = Counter()
     scores = defaultdict(list) 
     for pole in tqdm(adj_poles): 
         if pole not in good_axes: continue
@@ -114,8 +114,13 @@ def project_onto_specific_axes():
     full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_yearly.json')
     
     print("calculating bias of every word to specific axes...")
-    variances = Counter()
-    scores = defaultdict(list) 
+    # make a dataframe with columns word, year, cosine similarity, axis. 
+    d = {'word': [],
+         'year': [],
+         'cosine similarity': [], 
+         'axis': [],
+        }
+
     for pole in tqdm(adj_poles): 
         if pole not in axes_of_interest: continue # skip most of them, speeds up calculation
         if pole not in good_axes: continue
@@ -125,13 +130,15 @@ def project_onto_specific_axes():
         microframe = right_pole - left_pole
         # note that this is cosine distance, not cosine similarity
         c_w_f = fastdist.vector_to_matrix_distance(microframe, full_reps, fastdist.cosine, "cosine")
-        scores[pole] = list(c_w_f)
-        
-    with open(LOGS + 'semantics_mano/results/specific_scores.json', 'w') as outfile: 
-        json.dump(scores, outfile)
-        
-    with open(LOGS + 'semantics_mano/results/specific_vocab_order.txt', 'w') as outfile: 
-        outfile.write('\n'.join(vocab_order))
+        scores = list(c_w_f)
+        for i, word_year in vocab_order: 
+            parts = word_year.split('_')
+            d['word'].append(parts[0])
+            d['year'].append(int(parts[1]))
+            d['cosine similarity'].append(scores[i])
+            d['axis'].append(pole)
+    df = pd.DataFrame.from_dict(d)
+    df.to_csv(LOGS + 'semantics_mano/results/specific_scores.csv')
             
 def get_overall_embeddings(): 
     '''
@@ -224,7 +231,7 @@ def get_yearly_embeddings():
     
     for term in overall_vec: 
         overall_vec[term] = list(overall_vec[term] / total_count[term]) 
-    with open(AGG_EMBED_PATH + 'mano_monthly.json', 'w') as outfile: 
+    with open(AGG_EMBED_PATH + 'mano_yearly.json', 'w') as outfile: 
         json.dump(overall_vec, outfile)
         
 def pca_experiment(): 
@@ -272,7 +279,6 @@ def pca_experiment():
     np.save(AGG_EMBED_PATH + 'pca_mano_fem.npy', new_fem_reps)
     
     print("applying PCA transformation on poles")
-    variances = Counter()
     scores = defaultdict(list) 
     fem_ret = {} # {pole: [new_left, new_right]}
     masc_ret = {} # {pole: [new_left, new_right]}
