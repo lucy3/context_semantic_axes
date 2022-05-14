@@ -131,7 +131,7 @@ def project_onto_specific_axes():
         # note that this is cosine distance, not cosine similarity
         c_w_f = fastdist.vector_to_matrix_distance(microframe, full_reps, fastdist.cosine, "cosine")
         scores = list(c_w_f)
-        for i, word_year in vocab_order: 
+        for i, word_year in enumerate(vocab_order): 
             parts = word_year.split('_')
             d['word'].append(parts[0])
             d['year'].append(int(parts[1]))
@@ -308,6 +308,7 @@ def main():
     #get_overall_embeddings()
     #get_yearly_embeddings()
     #project_onto_axes()
+    project_onto_specific_axes()
 
 if __name__ == '__main__':
     main()
