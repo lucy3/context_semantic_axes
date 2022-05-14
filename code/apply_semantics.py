@@ -223,6 +223,7 @@ def get_yearly_embeddings():
             count = word_counts[key]
             parts = key.split('_')
             term = parts[0]
+            y = parts[-1]
             vec = np.array(d[key])*count
             total_count[term + '_' + str(y)] += count
             if term not in overall_vec: 
@@ -306,7 +307,7 @@ def pca_experiment():
 
 def main(): 
     #get_overall_embeddings()
-    #get_yearly_embeddings()
+    get_yearly_embeddings()
     #project_onto_axes()
     project_onto_specific_axes()
 
