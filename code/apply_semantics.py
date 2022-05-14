@@ -113,14 +113,17 @@ def project_onto_specific_axes():
     print("getting word vectors...")
     full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_yearly.json')
     
+    with open(LOGS + 'coref_results/mano_gender_labels.json', 'r') as infile: 
+        gender_labels = json.load(infile)
+    
     print("calculating bias of every word to specific axes...")
     # make a dataframe with columns word, year, cosine similarity, axis. 
     d = {'word': [],
          'year': [],
          'cosine similarity': [], 
          'axis': [],
+         'gender': [],
         }
-
     for pole in tqdm(adj_poles): 
         if pole not in axes_of_interest: continue # skip most of them, speeds up calculation
         if pole not in good_axes: continue
@@ -137,6 +140,15 @@ def project_onto_specific_axes():
             d['year'].append(int(parts[1]))
             d['cosine similarity'].append(scores[i])
             d['axis'].append(pole)
+            if parts[0] in gender_labels: 
+                if gender_labels[parts[0]] > 0.75: 
+                    d['gender'].append('fem')
+                elif gender_labels[parts[0]] < 0.25: 
+                    d['gender'].append('masc')
+                else: 
+                    d['gender'].append('other')
+            else: 
+                d['gender'].append('unknown')
     df = pd.DataFrame.from_dict(d)
     df.to_csv(LOGS + 'semantics_mano/results/specific_scores.csv')
             
