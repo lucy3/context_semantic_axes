@@ -4,7 +4,7 @@ vocab terms appear across reddit_rel
 and forum_rel
 """
 
-from pyspark import SparkConf, SparkContext
+#from pyspark import SparkConf, SparkContext
 from functools import partial
 import subprocess
 from helpers import get_vocab
@@ -109,7 +109,6 @@ def find_word_birthdates_reddit(sc):
     Searches through Reddit comments and submissions
     for the first post and community in which a vocab term is used 
     
-    TODO: get word birthdates for forum as well 
     '''
     remaining_vocab = set(get_vocab())
 
@@ -185,8 +184,8 @@ def get_forum_vocab(line, vocab=set()):
     bigrams = get_n_gramlist(toks, 2)
     overlap = (unigrams & vocab) | (bigrams & vocab)
     ret = []
-    for w in vocab_birthdates: 
-        ret.append(w, [date_month])
+    for w in overlap: 
+        ret.append((w, date_month))
     return ret
 
 def get_min_month(n1, n2): 
@@ -250,7 +249,7 @@ def get_overall_birthdateplace():
                         birth_places[w].append(forum)
                     elif min_month == curr_date: 
                         # earliest date seen so far 
-                        birth_date[w] = date
+                        birth_date[w] = curr_date
                         birth_places[w] = [forum]
                     # else, min_month is other_date and do nothing
         else: 
@@ -259,8 +258,8 @@ def get_overall_birthdateplace():
                 d = json.load(infile)
             curr_date = filename.replace('.json', '')
             for w in d: 
-                subreddits = d[w]
-                if w not in bith_date: 
+                subreddits = list(set(d[w]))
+                if w not in birth_date: 
                     birth_date[w] = curr_date
                     birth_places[w] = subreddits
                 else: 
@@ -279,12 +278,12 @@ def get_overall_birthdateplace():
         json.dump(res, outfile)
 
 def main():
-    conf = SparkConf()
-    sc = SparkContext(conf=conf)
-    find_word_birthdates_reddit(sc)
+    #conf = SparkConf()
+    #sc = SparkContext(conf=conf)
+    #find_word_birthdates_reddit(sc)
     #find_word_birthdates_forum(sc)
-    #get_overall_birthdateplace()
-    sc.stop()
+    get_overall_birthdateplace()
+    #sc.stop()
     
 
 if __name__ == '__main__':
