@@ -359,15 +359,22 @@ def get_top_subreddits():
     Then, we use spark to read in that file, map, and reduce by key, and write out
     the top 1000 subreddits that do not start with 'u' (user). 
     '''
-    pass # TODO TODO 
+    data = sc.textFile(DATA + 'all_reddit_post_counts/all_post_counts')
+    data = data.filter(lambda x: not x.startswith('u_') and ' ' in x)
+    data = data.map(lambda x: (x.split(' ')[0], int(x.split(' ')[1]))).reduceByKey(lambda n1, n2: n1 + n2)
+    data = data.filter(lambda tup: tup[1] > 100000)
+    data = Counter(data.collectAsMap())
+    with open(DATA + 'all_reddit_post_counts/top_subreddits.txt', 'w') as outfile: 
+        for tup in data.most_common(): 
+            outfile.write(tup[0] + ' ' + str(tup[1]) + '\n')
 
 def main(): 
     #check_duplicates_main()
     #extract_subreddits_main()
     #sample_reddit_control()
     #detect_bots()
-    count_posts_per_subreddit()
-    #get_top_subreddits()
+    #count_posts_per_subreddit()
+    get_top_subreddits()
     sc.stop()
 
 if __name__ == '__main__':

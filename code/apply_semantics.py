@@ -236,6 +236,7 @@ def get_yearly_embeddings():
             parts = key.split('_')
             term = parts[0]
             y = parts[-1]
+            if y == 'None': continue
             vec = np.array(d[key])*count
             total_count[term + '_' + str(y)] += count
             if term not in overall_vec: 
