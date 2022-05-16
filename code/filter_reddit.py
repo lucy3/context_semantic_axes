@@ -16,6 +16,8 @@ import csv
 from collections import Counter
 from helpers import get_sr_cats
 from nltk import ngrams
+from functools import partial
+import string
 
 conf = SparkConf()
 sc = SparkContext(conf=conf)
@@ -367,6 +369,85 @@ def get_top_subreddits():
     with open(DATA + 'all_reddit_post_counts/top_subreddits.txt', 'w') as outfile: 
         for tup in data.most_common(): 
             outfile.write(tup[0] + ' ' + str(tup[1]) + '\n')
+            
+def content_has_vocab(line, vocab=set()): 
+    '''
+    @inputs: 
+    - vocab: vocab words to find
+    
+    This function uses a fast/basic tokenizer, since
+    we are looking for words over the entirety of Reddit
+    '''
+    d = json.loads(line)
+    if 'selftext' in d: 
+        text = d['selftext'].lower()
+    elif 'body' in d: 
+        text = d['body'].lower()
+    else: 
+        text = ''
+    text = text.translate(str.maketrans(string.punctuation, ' ' * len(string.punctuation)))
+    toks = text.split()
+    unigrams = set(toks)
+    bigrams = set()
+    for s in ngrams(toks,n=2):        
+        bigrams.add(' '.join(s))  
+    overlap = (unigrams & vocab) | (bigrams & vocab)
+    if len(overlap) > 0: 
+        return True
+    return False
+            
+def extract_mainstream_subreddits(in_d, out_d, vocab, relevant_subs): 
+    """
+    Creates new files containing 
+    jsons of only relevant subreddits
+    @inputs: 
+    - in_d: folder with inputs
+    - out_d: folder with outputs
+    """
+    all_files = sorted(os.listdir(in_d))
+    for f in all_files:
+        year = f.split('-')[0].split('_')[-1]
+        if year in ['2005', '2006']: continue
+        filename = f.split('.')[0]
+        if os.path.isdir(out_d + filename): continue # skip ones we already have
+        unpack_file(in_d, f)
+        data = sc.textFile(in_d + filename)
+        not_wanted = data.filter(get_dumb_lines).collect()
+        data = data.filter(lambda line: not get_dumb_lines(line))
+        rel_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
+                    json.loads(line)['subreddit'].lower() in relevant_subs)
+        rel_data = rel_data.filter(partial(content_has_vocab, vocab=vocab))
+        rel_data.coalesce(1).saveAsTextFile(out_d + filename)
+        if len(not_wanted) > 0: 
+            # write bad lines to bad_jsons
+            with open(out_d + 'bad_jsons/' + filename + '.txt', 'w') as outfile: 
+                for line in not_wanted:
+                    outfile.write(line + '\n') 
+        pack_file(in_d, f)
+        
+def extract_lexical_innovations(): 
+    '''
+    Get relevant subreddits for comments and posts.
+    '''
+    # load top subreddits
+    N = 500
+    top_n_subreddits = set()
+    with open(DATA + 'all_reddit_post_counts/top_subreddits.txt', 'r') as infile: 
+        line_count = 0
+        for line in infile: 
+            top_n_subreddits.add(line.strip().split(' ')[0])
+            line_count += 1
+            if line_count == N: break
+    vocab = set()
+    with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
+        for line in infile: 
+            vocab.add(line.strip())
+    in_d = '/mnt/data0/corpora/reddit/comments/'
+    out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
+    extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
+    in_d = '/mnt/data0/corpora/reddit/submissions/'
+    out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
+    extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
 
 def main(): 
     #check_duplicates_main()
@@ -374,7 +455,8 @@ def main():
     #sample_reddit_control()
     #detect_bots()
     #count_posts_per_subreddit()
-    get_top_subreddits()
+    #get_top_subreddits()
+    extract_lexical_innovations()
     sc.stop()
 
 if __name__ == '__main__':
