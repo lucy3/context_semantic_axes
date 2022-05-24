@@ -97,60 +97,6 @@ def project_onto_axes():
         
     with open(LOGS + 'semantics_mano/results/vocab_order.txt', 'w') as outfile: 
         outfile.write('\n'.join(vocab_order))
-        
-def project_onto_specific_axes(): 
-    axes_of_interest = ['beautiful.a.01', 'lovable.a.01', 'attractive.a.01',
-                       'educated.a.01', 'intellectual.a.02', 
-                       'old.a.02', 'old.a.01', 
-                       'prejudiced.a.02', 'heavy.a.04', 'clean.a.01']
-    
-    print("getting axes...")
-    axes, axes_vocab = load_wordnet_axes()
-    # synset : (right_vec, left_vec)
-    adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
-    good_axes = get_good_axes()
-    
-    print("getting word vectors...")
-    full_reps, vocab_order = load_manosphere_vecs(AGG_EMBED_PATH + 'mano_yearly.json')
-    
-    with open(LOGS + 'coref_results/mano_gender_labels.json', 'r') as infile: 
-        gender_labels = json.load(infile)
-    
-    print("calculating bias of every word to specific axes...")
-    # make a dataframe with columns word, year, cosine similarity, axis. 
-    d = {'word': [],
-         'year': [],
-         'cosine similarity': [], 
-         'axis': [],
-         'gender': [],
-        }
-    for pole in tqdm(adj_poles): 
-        if pole not in axes_of_interest: continue # skip most of them, speeds up calculation
-        if pole not in good_axes: continue
-        left_vecs, right_vecs = adj_poles[pole]
-        left_pole = left_vecs.mean(axis=0)
-        right_pole = right_vecs.mean(axis=0)
-        microframe = right_pole - left_pole
-        # note that this is cosine distance, not cosine similarity
-        c_w_f = fastdist.vector_to_matrix_distance(microframe, full_reps, fastdist.cosine, "cosine")
-        scores = list(c_w_f)
-        for i, word_year in enumerate(vocab_order): 
-            parts = word_year.split('_')
-            d['word'].append(parts[0])
-            d['year'].append(int(parts[1]))
-            d['cosine similarity'].append(scores[i])
-            d['axis'].append(pole)
-            if parts[0] in gender_labels: 
-                if gender_labels[parts[0]] > 0.75: 
-                    d['gender'].append('fem')
-                elif gender_labels[parts[0]] < 0.25: 
-                    d['gender'].append('masc')
-                else: 
-                    d['gender'].append('other')
-            else: 
-                d['gender'].append('unknown')
-    df = pd.DataFrame.from_dict(d)
-    df.to_csv(LOGS + 'semantics_mano/results/specific_scores.csv')
             
 def get_overall_embeddings(): 
     '''
@@ -317,12 +263,76 @@ def pca_experiment():
         json.dump(fem_ret, outfile)
     with open(LOGS + 'semantics_mano/pca_masc_poles.json', 'w') as outfile: 
         json.dump(masc_ret, outfile)
+        
+def femcel_fds_experiment(): 
+    '''
+    The output is a dictionary of axis: list of scores, in order of full_reps
+    '''
+    print("getting axes...")
+    axes, axes_vocab = load_wordnet_axes()
+    # synset : (right_vec, left_vec)
+    adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
+    good_axes = get_good_axes()
+    
+    print("getting word vectors...")
+    with open(EMBED_PATH + 'reddit_2019.json', 'r') as infile: 
+        d2019 = json.load(infile) # { term_category_year : vector }
+    with open(EMBED_PATH + 'reddit_2019_wordcounts.json', 'r') as infile: 
+        word_counts2019 = json.load(infile)
+    with open(EMBED_PATH + 'reddit_2018.json', 'r') as infile: 
+        d2018 = json.load(infile) # { term_category_year : vector }
+    with open(EMBED_PATH + 'reddit_2018_wordcounts.json', 'r') as infile: 
+        word_counts2018 = json.load(infile)
+        
+    vocab = ['women', 'men', 'female', 'male']
+    bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+    bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+    vecs = defaultdict(list)
+    # femcels 2018, 2019
+    for w in vocab: 
+        femcel_vec = (np.array(d2019[w + '_Femcels_2019'])*word_counts2019[w + '_Femcels_2019'] + \
+                           np.array(d2018[w + '_Femcels_2018'])*word_counts2018[w + \
+                           '_Femcels_2018']) / (word_counts2019[w + '_Femcels_2019'] + \
+                                                word_counts2018[w + '_Femcels_2018'])
+        vecs['Femcels'].append((femcel_vec - bert_mean) / bert_std)
+        incel_vec = (np.array(d2019[w + '_Incels_2019'])*word_counts2019[w + '_Incels_2019'] + \
+                           np.array(d2018[w + '_Incels_2018'])*word_counts2018[w + \
+                           '_Incels_2018']) / (word_counts2019[w + '_Incels_2019'] + \
+                                                word_counts2018[w + '_Incels_2018'])
+        vecs['Incels'].append((incel_vec - bert_mean) / bert_std)
+        
+        vecs['FDS'].append((np.array(d2019[w + '_FDS_2019']) - bert_mean) / bert_std)
+        vecs['TRP'].append((np.array(d2019[w + '_TRP_2019']) - bert_mean) / bert_std)
+    
+    print("calculating bias of fds/femcel words to every axis...")
+    d = {
+        'axis': [],
+        'word': [], 
+        'community': [], 
+        'score': [],
+    }
+    for pole in tqdm(adj_poles): 
+        if pole not in good_axes: continue
+        left_vecs, right_vecs = adj_poles[pole]
+        left_pole = left_vecs.mean(axis=0)
+        right_pole = right_vecs.mean(axis=0)
+        microframe = right_pole - left_pole
+        # note that this is cosine distance, not cosine similarity
+        for community in vecs: 
+            reps = np.array(vecs[community])
+            c_w_f = fastdist.vector_to_matrix_distance(microframe, reps, fastdist.cosine, "cosine")
+            for i, w in enumerate(vocab): 
+                d['axis'].append(pole)
+                d['word'].append(w)
+                d['community'].append(community)
+                d['score'].append(c_w_f[i])
+    df = pd.DataFrame.from_dict(d)
+    df.to_csv(LOGS + 'semantics_mano/femcel_fds_exp.csv')
 
 def main(): 
     #get_overall_embeddings()
-    get_yearly_embeddings()
     #project_onto_axes()
-    project_onto_specific_axes()
+    femcel_fds_experiment()
 
 if __name__ == '__main__':
     main()

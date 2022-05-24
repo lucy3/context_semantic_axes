@@ -11,8 +11,10 @@ from nltk import ngrams
 from pyspark import SparkConf, SparkContext
 from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import Row, SQLContext
+from pyspark.sql.functions import col
 from functools import partial
 from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set, get_sr_cats
+from collections import defaultdict
 import os
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
@@ -21,6 +23,7 @@ COMS = ROOT + 'data/comments/'
 CONTROL = ROOT + 'data/reddit_control/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = ROOT + 'logs/gram_counts/'
+LOGS = ROOT + 'logs/'
 
 conf = SparkConf()
 sc = SparkContext(conf=conf)
@@ -268,6 +271,149 @@ def get_total_tokens():
     um_totals = sum(list(um_totals.values()))
     outfile.write('control:' + str(um_totals) + '\n')
     outfile.close()
+    
+def count_vocab_mainstream(line, tokenizer=None, vocab=set()): 
+    '''
+    Counts vocab words for mainstream reddit
+    These are PER-COMMENT counts
+    '''
+    d = json.loads(line)
+    if 'selftext' in d: 
+        text = d['selftext'].lower()
+    elif 'body' in d: 
+        text = d['body'].lower()
+    else: 
+        text = ''
+    sr = d['subreddit']
+    toks = tokenizer.tokenize(text)
+    unigrams = set(toks)
+    bigrams = set()
+    for s in ngrams(toks,n=2):        
+        bigrams.add(' '.join(s))  
+    overlap = (unigrams & vocab) | (bigrams & vocab)
+    ret = []
+    for w in overlap: 
+        ret.append(((sr, w), 1))
+    return ret
+    
+def count_lexical_innovations(): 
+    '''
+    get monthly counts of each lexical innovation in mainstream dataset
+    '''
+    mainstream_path = ROOT + 'data/mainstream/'
+    schema = StructType([
+      StructField('word', StringType(), True),
+      StructField('count', IntegerType(), True),
+      StructField('community', StringType(), True),
+      StructField('month', StringType(), True)
+      ])
+    df = sqlContext.createDataFrame([],schema)
+    bots = get_bot_set()
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    vocab = set()
+    with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
+        for line in infile: 
+            vocab.add(line.strip())
+    for folder in sorted(os.listdir(mainstream_path)):
+        if not folder.startswith('RC_'): continue 
+        com_input = mainstream_path + folder + '/part-00000'
+        month = folder.replace('RC_', '')
+        sub_input = ''
+        if os.path.exists(mainstream_path + 'RS_' + month): 
+            sub_input = mainstream_path + 'RS_' + month + '/part-00000'
+        elif os.path.exists(mainstream_path + 'RS_v2_' + month): 
+            sub_input = mainstream_path + 'RS_v2_' + month + '/part-00000'
+        assert sub_input != ''
+        if not os.path.exists(com_input) and not os.path.exists(sub_input): continue
+
+        if os.path.exists(sub_input): 
+            pdata = sc.textFile(sub_input)
+            pdata = pdata.filter(partial(remove_bots, bot_set=bots))
+            pdata = pdata.flatMap(partial(count_vocab_mainstream, tokenizer=tokenizer, vocab=vocab))
+            pdata = pdata.reduceByKey(lambda n1, n2: n1 + n2)
+        else: 
+            pdata = sc.emptyRDD()
+        
+        if os.path.exists(com_input): 
+            cdata = sc.textFile(com_input)
+            cdata = cdata.filter(partial(remove_bots, bot_set=bots))
+            cdata = cdata.flatMap(partial(count_vocab_mainstream, tokenizer=tokenizer, vocab=vocab))
+            cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
+        else: 
+            cdata = sc.emptyRDD()
+        
+        data = cdata.union(pdata)
+        data = data.reduceByKey(lambda n1, n2: n1 + n2) 
+        
+        data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=month))
+        data_df = sqlContext.createDataFrame(data, schema)
+        df = df.union(data_df)
+    df.write.mode('overwrite').parquet(LOGS + 'word_dest/mainstream_counts')
+    
+def month_year_iter(start, end):
+    '''
+    https://stackoverflow.com/questions/5734438/how-to-create-a-month-iterator
+    '''
+    start_contents = start.split('-')
+    start_month = int(start_contents[1])
+    start_year = int(start_contents[0])
+    end_contents = end.split('-')
+    end_month = int(end_contents[1])
+    end_year = int(end_contents[0])
+    ym_start= 12*start_year + start_month - 1
+    ym_end= 12*end_year + end_month - 1
+    for ym in range( ym_start, ym_end ):
+        y, m = divmod( ym, 12 )
+        month = str(m + 1)
+        if len(month) == 1: 
+            month = '0' + month
+        yield str(y) + '-' + month
+    
+def mainstream_sustained_periods(): 
+    '''
+    Get words that have sustained presence in mainstream reddit.
+    '''
+    vocab = set()
+    with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
+        for line in infile: 
+            vocab.add(line.strip())
+            
+    mainstream_df = sqlContext.read.parquet(LOGS + 'word_dest/mainstream_counts')
+    mainstream_df = mainstream_df.filter(mainstream_df['count'] > 20) # 32665 rows
+    srs = set(mainstream_df.select('community').rdd.flatMap(lambda x: x).collect()) # 326 subreddits
+    words = set(mainstream_df.select('word').rdd.flatMap(lambda x: x).collect()) # 132 words
+    sustained_periods = defaultdict(dict) # {w : {sr : (start, end)}}
+    for sr in srs: 
+        for w in words: 
+            this_df = mainstream_df.filter(mainstream_df['community'] == sr).filter(mainstream_df['word'] == w)
+            if this_df.count() >= 3: 
+                month_counts = this_df.select(col('month'), col('count')).toPandas().set_index('month').to_dict()['count']
+                month_range = sorted(month_counts.keys())
+                start = None
+                num_months = 0
+                prev_month = None
+                end = None
+                for month in month_year_iter(min(month_range), max(month_range)): 
+                    if month in month_counts: # increment months, assign start if needed
+                        if start is None: 
+                            start = month
+                        num_months += 1
+                    elif num_months < 3: # not a long enough sustained period, restart
+                        start = None
+                        num_months = 0
+                    else: # end of earliest sustained period
+                        end = prev_month 
+                        break
+                    prev_month = month
+                if start and end: 
+                    sustained_periods[w][sr] = (start, end)
+                    
+    with open(LOGS + 'sustained_mainstream.json', 'w') as outfile: 
+        json.dump(sustained_periods, outfile)
+            
+#     manosphere_df = sqlContext.read.parquet(LOGS + 'gram_counts/combined_counts_set')
+#     manosphere_df = manosphere_df.filter(~manosphere_df.word.isin(vocab))
+#     manosphere_df = manosphere_df.filter(manosphere_df['count'] > 20) # 14,559,904 rows
 
 def main(): 
 #     count_control(per_comment=False)
@@ -276,7 +422,9 @@ def main():
 #     count_control()
 #     count_sr()
 #     count_forum()
-    get_total_tokens()
+#     get_total_tokens()
+#     count_lexical_innovations()
+    mainstream_sustained_periods()
     sc.stop()
 
 if __name__ == "__main__":

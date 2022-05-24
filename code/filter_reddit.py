@@ -407,7 +407,7 @@ def extract_mainstream_subreddits(in_d, out_d, vocab, relevant_subs):
     all_files = sorted(os.listdir(in_d))
     for f in all_files:
         year = f.split('-')[0].split('_')[-1]
-        if year in ['2005', '2006']: continue
+        if year in ['2005', '2006', '2020', '2021']: continue
         filename = f.split('.')[0]
         if os.path.isdir(out_d + filename): continue # skip ones we already have
         unpack_file(in_d, f)
@@ -442,9 +442,9 @@ def extract_lexical_innovations():
     with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
         for line in infile: 
             vocab.add(line.strip())
-    in_d = '/mnt/data0/corpora/reddit/comments/'
-    out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
-    extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
+    #in_d = '/mnt/data0/corpora/reddit/comments/'
+    #out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
+    #extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
     in_d = '/mnt/data0/corpora/reddit/submissions/'
     out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
     extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
