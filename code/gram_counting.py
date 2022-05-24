@@ -16,6 +16,7 @@ from functools import partial
 from helpers import check_valid_comment, check_valid_post, remove_bots, get_bot_set, get_sr_cats
 from collections import defaultdict
 import os
+from tqdm import tqdm
 
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
@@ -368,26 +369,17 @@ def month_year_iter(start, end):
         if len(month) == 1: 
             month = '0' + month
         yield str(y) + '-' + month
-    
-def mainstream_sustained_periods(): 
-    '''
-    Get words that have sustained presence in mainstream reddit.
-    '''
-    vocab = set()
-    with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
-        for line in infile: 
-            vocab.add(line.strip())
-            
-    mainstream_df = sqlContext.read.parquet(LOGS + 'word_dest/mainstream_counts')
-    mainstream_df = mainstream_df.filter(mainstream_df['count'] > 20) # 32665 rows
-    srs = set(mainstream_df.select('community').rdd.flatMap(lambda x: x).collect()) # 326 subreddits
-    words = set(mainstream_df.select('word').rdd.flatMap(lambda x: x).collect()) # 132 words
+        
+def get_sustained_periods(df): 
+    srs = set(df['community'].to_list()) 
+    words = set(df['word'].to_list()) 
     sustained_periods = defaultdict(dict) # {w : {sr : (start, end)}}
-    for sr in srs: 
+    for sr in tqdm(srs): 
         for w in words: 
-            this_df = mainstream_df.filter(mainstream_df['community'] == sr).filter(mainstream_df['word'] == w)
-            if this_df.count() >= 3: 
-                month_counts = this_df.select(col('month'), col('count')).toPandas().set_index('month').to_dict()['count']
+            this_df = df[df['community'] == sr]
+            this_df = this_df[this_df['word'] == w]
+            if len(this_df) >= 3: 
+                month_counts = this_df[['month', 'count']].set_index('month').to_dict()['count']
                 month_range = sorted(month_counts.keys())
                 start = None
                 num_months = 0
@@ -405,15 +397,42 @@ def mainstream_sustained_periods():
                         end = prev_month 
                         break
                     prev_month = month
+                if start and not end: 
+                    end = max(month_range)
                 if start and end: 
                     sustained_periods[w][sr] = (start, end)
+    return sustained_periods
+    
+def mainstream_sustained_periods(): 
+    '''
+    Get words that have sustained presence in mainstream reddit.
+    '''
+    vocab = set()
+    with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
+        for line in infile: 
+            vocab.add(line.strip())
+            
+    mainstream_df = sqlContext.read.parquet(LOGS + 'word_dest/mainstream_counts')
+    mainstream_df = mainstream_df.filter(mainstream_df['count'] > 20) # 32665 rows
+    mainstream_df = mainstream_df.toPandas()
+    sustained_periods = get_sustained_periods(mainstream_df)
                     
     with open(LOGS + 'sustained_mainstream.json', 'w') as outfile: 
         json.dump(sustained_periods, outfile)
-            
-#     manosphere_df = sqlContext.read.parquet(LOGS + 'gram_counts/combined_counts_set')
-#     manosphere_df = manosphere_df.filter(~manosphere_df.word.isin(vocab))
-#     manosphere_df = manosphere_df.filter(manosphere_df['count'] > 20) # 14,559,904 rows
+        
+def manosphere_sustained_periods(): 
+    with open(LOGS + 'sustained_mainstream.json', 'r') as infile: 
+        sustained_periods = json.load(infile)
+        
+    vocab = set(sustained_periods.keys()) # 107 words
+    manosphere_df = sqlContext.read.parquet(LOGS + 'gram_counts/combined_counts_set')
+    manosphere_df = manosphere_df.filter(manosphere_df.word.isin(vocab))
+    manosphere_df = manosphere_df.filter(manosphere_df['count'] > 20) # 4938 rows
+    manosphere_df = manosphere_df.toPandas()
+    sustained_periods = get_sustained_periods(manosphere_df)
+                    
+    with open(LOGS + 'sustained_manosphere.json', 'w') as outfile: 
+        json.dump(sustained_periods, outfile)
 
 def main(): 
 #     count_control(per_comment=False)
@@ -425,6 +444,7 @@ def main():
 #     get_total_tokens()
 #     count_lexical_innovations()
     mainstream_sustained_periods()
+    manosphere_sustained_periods()
     sc.stop()
 
 if __name__ == "__main__":
