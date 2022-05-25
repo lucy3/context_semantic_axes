@@ -280,67 +280,67 @@ def preprocess_gender_variant_sents():
     vocab = ['moids', 'femoids', 'foids', 'women', 'men']
     tokenizer = BasicTokenizer(do_lower_case=True)
     bots = get_bot_set()
-#     categories = get_subreddit_categories()
-#     year_month = defaultdict(list) # {year : [months]}
-#     for filename in os.listdir(COMS): 
-#         if not filename.startswith('RC_'): continue
-#         y = filename.replace('RC_', '').split('-')[0]
-#         year_month[y].append(filename)
+    categories = get_subreddit_categories()
+    year_month = defaultdict(list) # {year : [months]}
+    for filename in os.listdir(COMS): 
+        if not filename.startswith('RC_'): continue
+        y = filename.replace('RC_', '').split('-')[0]
+        year_month[y].append(filename)
 
-#     for y in year_month: 
-#         if y not in ['2016', '2017', '2018', '2019']: continue # the innovations occur in these years
-#         all_word2id = sc.emptyRDD() # []
-#         all_id2sent = sc.emptyRDD() # [(id, sent)]
-#         for filename in year_month[y]: 
-#             m = filename.replace('RC_', '')
-#             cdata = sc.textFile(COMS + filename + '/part-00000')
-#             cdata = cdata.filter(check_valid_comment)
-#             cdata = cdata.filter(partial(remove_bots, bot_set=bots))
-#             cdata = cdata.map(partial(preprocess_comment, tokenizer=tokenizer, year=y, vocab=vocab, categories=categories))
-#             cword2id = cdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
-#             cword2id = cword2id.reduceByKey(lambda n1, n2: n1 + n2)
-#             cid2sent = cdata.flatMap(lambda x: x[1])
+    for y in year_month: 
+        if y not in ['2016', '2017', '2018', '2019']: continue # the innovations occur in these years
+        all_word2id = sc.emptyRDD() # []
+        all_id2sent = sc.emptyRDD() # [(id, sent)]
+        for filename in year_month[y]: 
+            m = filename.replace('RC_', '')
+            cdata = sc.textFile(COMS + filename + '/part-00000')
+            cdata = cdata.filter(check_valid_comment)
+            cdata = cdata.filter(partial(remove_bots, bot_set=bots))
+            cdata = cdata.map(partial(preprocess_comment, tokenizer=tokenizer, year=y, vocab=vocab, categories=categories))
+            cword2id = cdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
+            cword2id = cword2id.reduceByKey(lambda n1, n2: n1 + n2)
+            cid2sent = cdata.flatMap(lambda x: x[1])
 
-#             if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
-#                 post_path = SUBS + 'RS_' + m + '/part-00000'
-#             else: 
-#                 post_path = SUBS + 'RS_v2_' + m + '/part-00000'
-#             pdata = sc.textFile(post_path)
-#             pdata = pdata.filter(check_valid_post)
-#             pdata = pdata.filter(partial(remove_bots, bot_set=bots))
-#             pdata = pdata.map(partial(preprocess_post, tokenizer=tokenizer, year=y, vocab=vocab, categories=categories))
-#             pword2id = pdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
-#             pword2id = pword2id.reduceByKey(lambda n1, n2: n1 + n2)
-#             pid2sent = pdata.flatMap(lambda x: x[1])
-#             all_word2id = sc.union([all_word2id, cword2id, pword2id])
-#             all_word2id = all_word2id.reduceByKey(lambda n1, n2: n1 + n2)
-#             all_id2sent = sc.union([all_id2sent, cid2sent, pid2sent])
+            if os.path.exists(SUBS + 'RS_' + m + '/part-00000'): 
+                post_path = SUBS + 'RS_' + m + '/part-00000'
+            else: 
+                post_path = SUBS + 'RS_v2_' + m + '/part-00000'
+            pdata = sc.textFile(post_path)
+            pdata = pdata.filter(check_valid_post)
+            pdata = pdata.filter(partial(remove_bots, bot_set=bots))
+            pdata = pdata.map(partial(preprocess_post, tokenizer=tokenizer, year=y, vocab=vocab, categories=categories))
+            pword2id = pdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
+            pword2id = pword2id.reduceByKey(lambda n1, n2: n1 + n2)
+            pid2sent = pdata.flatMap(lambda x: x[1])
+            all_word2id = sc.union([all_word2id, cword2id, pword2id])
+            all_word2id = all_word2id.reduceByKey(lambda n1, n2: n1 + n2)
+            all_id2sent = sc.union([all_id2sent, cid2sent, pid2sent])
             
-#         all_word2id = all_word2id.map(exact_sample_small).collectAsMap()
-#         ids_to_keep = set()
-#         for k in all_word2id: 
-#             ids_to_keep.update(all_word2id[k])
-#         all_id2sent = all_id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
-#         with open(LOGS + 'variants/reddit_' + y + '_word2id.json', 'w') as outfile: 
-#             json.dump(all_word2id, outfile)
-#         with open(LOGS + 'variants/reddit_' + y + '_id2sent.json', 'w') as outfile: 
-#             json.dump(all_id2sent, outfile)
+        all_word2id = all_word2id.map(exact_sample_small).collectAsMap()
+        ids_to_keep = set()
+        for k in all_word2id: 
+            ids_to_keep.update(all_word2id[k])
+        all_id2sent = all_id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
+        with open(LOGS + 'variants/reddit_' + y + '_word2id.json', 'w') as outfile: 
+            json.dump(all_word2id, outfile)
+        with open(LOGS + 'variants/reddit_' + y + '_id2sent.json', 'w') as outfile: 
+            json.dump(all_id2sent, outfile)
             
-#     for filename in os.listdir(FORUMS):
-#         data = sc.textFile(FORUMS + filename)
-#         data = data.map(partial(preprocess_forum_post, tokenizer=tokenizer, forum=filename, vocab=vocab))
-#         word2id = data.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
-#         word2id = word2id.reduceByKey(lambda n1, n2: n1 + n2)
-#         id2sent = data.flatMap(lambda x: x[1])
-#         all_word2id = word2id.map(exact_sample_small).collectAsMap()
-#         ids_to_keep = set()
-#         for k in all_word2id: 
-#             ids_to_keep.update(all_word2id[k])
-#         all_id2sent = id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
-#         with open(LOGS + 'variants/forum_' + filename + '_word2id.json', 'w') as outfile: 
-#             json.dump(all_word2id, outfile)
-#         with open(LOGS + 'variants/forum_' + filename + '_id2sent.json', 'w') as outfile: 
-#             json.dump(all_id2sent, outfile)
+    for filename in os.listdir(FORUMS):
+        data = sc.textFile(FORUMS + filename)
+        data = data.map(partial(preprocess_forum_post, tokenizer=tokenizer, forum=filename, vocab=vocab))
+        word2id = data.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
+        word2id = word2id.reduceByKey(lambda n1, n2: n1 + n2)
+        id2sent = data.flatMap(lambda x: x[1])
+        all_word2id = word2id.map(exact_sample_small).collectAsMap()
+        ids_to_keep = set()
+        for k in all_word2id: 
+            ids_to_keep.update(all_word2id[k])
+        all_id2sent = id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
+        with open(LOGS + 'variants/forum_' + filename + '_word2id.json', 'w') as outfile: 
+            json.dump(all_word2id, outfile)
+        with open(LOGS + 'variants/forum_' + filename + '_id2sent.json', 'w') as outfile: 
+            json.dump(all_id2sent, outfile)
             
     vocab = ['women', 'men']
     year_month = defaultdict(list) # {year : [months]}
