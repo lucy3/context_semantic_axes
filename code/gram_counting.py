@@ -374,6 +374,7 @@ def get_sustained_periods(df):
     srs = set(df['community'].to_list()) 
     words = set(df['word'].to_list()) 
     sustained_periods = defaultdict(dict) # {w : {sr : (start, end)}}
+    df = df[df['month'] != 'None-None']
     for sr in tqdm(srs): 
         for w in words: 
             this_df = df[df['community'] == sr]
@@ -443,8 +444,8 @@ def main():
 #     count_forum()
 #     get_total_tokens()
 #     count_lexical_innovations()
-    mainstream_sustained_periods()
-    manosphere_sustained_periods()
+#     mainstream_sustained_periods()
+#     manosphere_sustained_periods()
     sc.stop()
 
 if __name__ == "__main__":
