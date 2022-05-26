@@ -25,6 +25,8 @@ EMBED_PATH = LOGS + 'semantics_mano/embed/'
 AGG_EMBED_PATH = LOGS + 'semantics_mano/agg_embed/'
 VARIANT_OUT = LOGS + 'semantics_mano/variant_scores/'
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def load_manosphere_vecs(inpath): 
     '''
     Load z-scored embeddings for each vocabulary term
@@ -326,7 +328,7 @@ def get_axes_scores_variants():
                     return 
                 word_cat = word + '_' + batch_meta[i][j]
                 word_scores = fastdist.vector_to_matrix_distance(word_embed, m, fastdist.cosine, "cosine")
-                word_reps[word_cat].append(word_scores)
+                word_reps[word_cat].append(list(word_scores))
                 
         torch.cuda.empty_cache()
         
