@@ -242,8 +242,6 @@ def batch_data():
             meta = sentID_meta[sentID]
             words = sentID_word[sentID]
             for w in words: 
-                if w not in tokens: 
-                    print(tokens, sentID, sent)
                 idx = tokens.index(w)
                 replaced_tokens = copy.deepcopy(tokens)
                 replaced_tokens[idx] = 'people'
