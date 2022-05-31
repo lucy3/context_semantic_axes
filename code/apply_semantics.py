@@ -293,6 +293,9 @@ def get_axes_scores_variants():
     batch_sentences, batch_words, batch_meta = batch_data()
     print("NUMBER OF BATCHES:", len(batch_sentences))
     
+    bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+    bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+    
     print("getting microframe matrix...")
     m = get_microframe_matrix()
     
@@ -327,6 +330,7 @@ def get_axes_scores_variants():
                     print("PROBLEM!!!", word, batch[j])
                     return 
                 word_cat = word + '_' + batch_meta[i][j]
+                word_embed = (word_embed - bert_mean) / bert_std # z-score
                 word_scores = fastdist.vector_to_matrix_distance(word_embed, m, fastdist.cosine, "cosine")
                 word_reps[word_cat].append(list(word_scores))
                 
@@ -354,6 +358,8 @@ def batch_data_domains():
             tokens = tokenizer.tokenize(text)
             overlap = set(tokens) & vocab
             for w in overlap: 
+                # "women" tends to appear in additional sentences
+                if len(overlap) > 1 and w == 'women': continue 
                 curr_batch.append(tokens)
                 curr_words.append(w)
                 curr_meta.append('wikipedia')
@@ -417,6 +423,9 @@ def get_axes_scores_domains():
     print("batching...")
     batch_sentences, batch_words, batch_meta = batch_data_domains()
     
+    bert_mean = np.load(LOGS + 'wikipedia/mean_BERT.npy')
+    bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
+    
     print("getting microframe matrix...")
     m = get_microframe_matrix()
     
@@ -443,6 +452,7 @@ def get_axes_scores_domains():
                     curr_word = batch[j][word_id]
                     if curr_word == batch_words[i][j]: 
                         word_tokenids[curr_word].append(k)
+                        break # vocab is single wordpieces, use first occurrence
             for word in word_tokenids: 
                 token_ids_word = np.array(word_tokenids[word]) 
                 word_embed = vector[j][token_ids_word]
@@ -451,6 +461,7 @@ def get_axes_scores_domains():
                     print("PROBLEM!!!", word, batch[j])
                     return 
                 word_cat = word + '_' + batch_meta[i][j]
+                word_embed = (word_embed - bert_mean) / bert_std
                 word_scores = fastdist.vector_to_matrix_distance(word_embed, m, fastdist.cosine, "cosine")
                 word_reps[word_cat].append(list(word_scores))
                 
@@ -463,7 +474,7 @@ def main():
     #get_overall_embeddings()
     #project_onto_axes() 
     #get_axes_scores_variants()
-    get_axes_scores_domains()
+    get_axes_scores_domains(replace=True)
 
 if __name__ == '__main__':
     main()
