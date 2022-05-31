@@ -18,8 +18,8 @@ import requests
 import json
 from tqdm import tqdm
 from transformers import BasicTokenizer, BertTokenizerFast, BertModel, BertTokenizer
-#from pyspark import SparkConf, SparkContext
-#from pyspark.sql import Row, SQLContext
+from pyspark import SparkConf, SparkContext
+from pyspark.sql import Row, SQLContext
 from functools import partial
 from collections import Counter, defaultdict
 import random
@@ -29,8 +29,8 @@ import numpy as np
 import os
 import copy
 
-ROOT = '/global/scratch/users/lucy3_li/manosphere/'
-#ROOT = '/mnt/data0/lucy/manosphere/'
+#ROOT = '/global/scratch/users/lucy3_li/manosphere/'
+ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
 LOGS = ROOT + 'logs/'
 
@@ -146,8 +146,10 @@ def sample_wikipedia_helper(vocab, vocab_name):
 def sample_wikipedia(): 
     #vocab = get_adj()
     #sample_wikipedia_helper(vocab, 'adj')
-    vocab = set(['person'])
-    sample_wikipedia_helper(vocab, 'person')
+#     vocab = set(['person'])
+#     sample_wikipedia_helper(vocab, 'person')
+    vocab = set(['feminists', 'women', 'girls', 'females'])
+    sample_wikipedia_helper(vocab, 'women')
     
 def count_axes(): 
     '''
@@ -659,7 +661,7 @@ def get_bert_mean_std():
     np.save(LOGS + 'wikipedia/std_BERT.npy', std_word_rep)
 
 def main(): 
-    #sample_wikipedia()
+    sample_wikipedia()
     #get_axes_contexts()
     #print("----------------------")
     #get_adj_embeddings('bert-default', save_agg=False)
@@ -670,7 +672,7 @@ def main():
     #get_occupation_embeddings(DATA + 'semantics/occupation_sents.json', LOGS + 'semantics_val/occupations_BERT.json')
     #get_occupation_embeddings(DATA + 'semantics/person_occupation_sents.json', 
     #                          LOGS + 'semantics_val/person_BERT.json', find_person=True)
-    get_person_embedding()
+    #get_person_embedding()
 
 if __name__ == '__main__':
     main()

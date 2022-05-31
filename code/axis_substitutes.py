@@ -377,9 +377,9 @@ def inspect_contexts(model_name):
     version of the context.
     '''
     if model_name == 'bert-base-uncased': 
-        infile_name = 'adj_lines_base-substitutes.json'
+        infile_name = 'adj_lines_base-probs.json'
     elif model_name == 'bert-large-uncased': 
-        infile_name = 'adj_lines_large-substitutes.json'
+        infile_name = 'adj_lines_large-probs.json'
     
     with open(LOGS + 'wikipedia/' + infile_name, 'r') as infile: 
         adj_lines = defaultdict(list, json.load(infile)) # {line_num: [(adj, synset)]}
@@ -421,6 +421,125 @@ def inspect_contexts(model_name):
 
     print("Axis all empty:", all_empty_count)
     print("Axis one side empty:", one_empty_count)
+    
+def show_contexts_helper(): 
+    '''
+    For producing a figure that combines the two approaches
+    Uses 'clean" as the example.
+    '''
+    model_name = 'bert-base-uncased'
+    target_example = 'clean.a.01'
+    
+    synonyms, antonyms = get_syn_ant() # {adj : {synset: [synonyms]} } or {adj : {synset: [antonyms]} }
+    tokenizer = get_tokenizer(model_name)
+    
+    syn_scores = defaultdict(dict) # { synset_side : { line_ID_adj: [scores] } }
+    syn_subs = defaultdict(dict) # { synset_side : { line_ID_adj: [subs] } } where subs in same order as scores
+    ant_scores = defaultdict(dict)
+    ant_subs = defaultdict(dict)
+    c = 0
+    with open(LOGS + 'wikipedia/wordnet_probs/' + model_name + '.csv', 'r') as infile: 
+        for line in infile: 
+            if c % 1000000 == 0: 
+                print("Read in", c, "lines")
+            c += 1
+            contents = line.strip().split(' ')
+            line_num = contents[1] # line number
+            adj = contents[2] # adj masked in that line
+            adj_id = str(tokenizer.convert_tokens_to_ids([adj])[0]) # bert token ID
+            subs = [] # substitute bert ID
+            scores = [] # probability
+            if len(contents) > 3: # at least one substitute
+                for i in range(3, len(contents)): # every substitute
+                    item = contents[i].split('_')
+                    # leave out correct substitute
+                    if item[0] == adj_id: 
+                        continue
+                    scores.append(float(item[1])) # prob
+                    subs.append(item[0]) # substitute bert ID
+            synset_a_s = contents[0].split('_') # [synset, syn or ant]
+            synset = synset_a_s[0] 
+            if synset != target_example: continue 
+            if synset + '_left' in synonyms[adj]: # map from syn/ant to synset side
+                synset_side = synset + '_left'
+            if synset + '_right' in synonyms[adj]: 
+                synset_side = synset + '_right'
+            if synset_a_s[1] == 'syn': 
+                syn_scores[synset_side][line_num + '_' + adj] = scores
+                syn_subs[synset_side][line_num + '_' + adj] = subs
+            if synset_a_s[1] == 'ant': 
+                ant_scores[synset_side][line_num + '_' + adj] = scores
+                ant_subs[synset_side][line_num + '_' + adj] = subs
+    
+    c = 0
+    outfile = open(LOGS + 'wikipedia/adj_context_example.txt', 'w')
+    outfile.write('TOP CHOSEN EXAMPLES\n')
+    
+    for synset_side in tqdm(syn_scores): 
+        # for synset_left or synset_right
+        syn_avg_scores = Counter()
+        for line_num_adj in syn_scores[synset_side]: 
+            syn_s = syn_scores[synset_side][line_num_adj]
+            ant_s = ant_scores[synset_side][line_num_adj]
+            if len(syn_s) == 0 or len(ant_s) == 0: 
+                # later will backoff onto BERT default
+                continue
+            syn_avg_scores[line_num_adj] = sum(syn_s) / len(syn_s)
+        # sort contexts by average synonym prob
+        top_k = syn_avg_scores.most_common()
+        synset_total_vecs = 0 
+        for tup in top_k: 
+            line_num_adj, avg_syn_s = tup
+            # get lists of scores 
+            syn_s = syn_scores[synset_side][line_num_adj]
+            ant_s = ant_scores[synset_side][line_num_adj]
+            avg_ant_s = sum(ant_s) / len(ant_s)
+            if avg_syn_s > avg_ant_s: 
+                line_adj = line_num_adj.split('_')
+                line_ID = line_adj[0]
+                adj = line_adj[1]
+                outfile.write(str(line_ID) + '\t' + str(adj) + '\t' + str(synset_side) + '\n')
+                synset_total_vecs += 1
+            if synset_total_vecs == 5: 
+                break
+                
+    outfile.write('RANDOM EXAMPLES\n')
+                
+    with open(LOGS + 'wikipedia/adj_lines_random.json', 'r') as infile: 
+        baseline_adj_lines = json.load(infile)
+        
+    for line_ID in baseline_adj_lines: 
+        for tup in baseline_adj_lines[line_ID]: 
+            adj = tup[0]
+            synset = tup[1]
+            if synset == target_example + '_right' or synset == target_example + '_left': 
+                outfile.write(str(line_ID) + '\t' + str(adj) + '\t' + str(synset_side) + '\n')
+                
+    outfile.close()
+    
+def show_contexts():
+    '''
+    This is used for gathering example contexts for Figure 1
+    '''
+    #show_contexts_helper()
+    top1 = ['93827074', '80901337', '76114010', '42995229', '63761215'] # all top dirty
+    top2 = ['18755839', '37662617', '4056357', '54754605', '42121215'] # all top clean
+    random1 = ['2879000', '61128837', '40416543', '97127831', '48701118'] # filthy
+    #random2 = ['31595372', '9917079', '26270998', '52113871', '4177186'] # cleanly
+    random2 = ['14623795', '54942550', '63010581', '61775106', '15095992'] # spotless
+            
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
+        for line in infile:
+            contents = line.split('\t')
+            line_num = contents[0]
+            if line_num in top1: 
+                print("TOP1", '\t'.join(contents[1:]).lower())
+            if line_num in top2: 
+                print("TOP2", '\t'.join(contents[1:]).lower())
+            if line_num in random1: 
+                print("RANDOM1", '\t'.join(contents[1:]).lower())
+            if line_num in random2: 
+                print("RANDOM2", '\t'.join(contents[1:]).lower())
 
 def main(): 
     #predict_substitutes('bert-base-uncased')
@@ -428,9 +547,10 @@ def main():
     #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
-    find_good_contexts_probs('bert-base-uncased')
+    #find_good_contexts_probs('bert-base-uncased')
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
+    show_contexts()
 
 if __name__ == '__main__':
     main()

@@ -17,6 +17,7 @@ import os
 import csv
 import torch
 import copy
+from nltk import tokenize
 
 ROOT = '/mnt/data0/lucy/manosphere/'
 DATA = ROOT + 'data/'
@@ -24,6 +25,7 @@ LOGS = ROOT + 'logs/'
 EMBED_PATH = LOGS + 'semantics_mano/embed/'
 AGG_EMBED_PATH = LOGS + 'semantics_mano/agg_embed/'
 VARIANT_OUT = LOGS + 'semantics_mano/variant_scores/'
+WOMEN_OUT = LOGS + 'semantics_mano/women_scores/'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -332,11 +334,136 @@ def get_axes_scores_variants():
         
     with open(VARIANT_OUT + 'scores.json', 'w') as outfile: 
         json.dump(word_reps, outfile)
+        
+def batch_data_domains(): 
+    tokenizer = BasicTokenizer(do_lower_case=True)
+    vocab = set(['feminists', 'women', 'girls', 'females'])
+    batch_size = 8
+    batch_sentences = [] # each item is a list
+    batch_words = [] # each item is a list
+    batch_meta = []
+    curr_batch = []
+    curr_words = []
+    curr_meta = []
+    
+    with open(LOGS + 'wikipedia/women_data/part-00000', 'r') as infile: 
+        print("going through wikipedia...")
+        for line in infile: 
+            contents = line.split('\t')
+            text = '\t'.join(contents[1:])
+            tokens = tokenizer.tokenize(text)
+            overlap = set(tokens) & vocab
+            for w in overlap: 
+                curr_batch.append(tokens)
+                curr_words.append(w)
+                curr_meta.append('wikipedia')
+                if len(curr_batch) == batch_size: 
+                    batch_sentences.append(curr_batch)
+                    batch_words.append(curr_words)
+                    batch_meta.append(curr_meta)
+                    curr_batch = []
+                    curr_words = []   
+                    curr_meta = []
+    with open(LOGS + 'women_control_sample.csv', 'r') as infile: 
+        print("going through control...")
+        reader = csv.reader(infile, delimiter='\t')
+        for row in reader: 
+            w = row[0]
+            sents = tokenize.sent_tokenize(row[4])
+            for sent in sents: 
+                tokens = tokenizer.tokenize(sent)
+                if w in tokens: 
+                    curr_batch.append(tokens)
+                    curr_words.append(w)
+                    curr_meta.append('control')
+                    if len(curr_batch) == batch_size: 
+                        batch_sentences.append(curr_batch)
+                        batch_words.append(curr_words)
+                        batch_meta.append(curr_meta)
+                        curr_batch = []
+                        curr_words = []   
+                        curr_meta = []
+                    break
+    with open(LOGS + 'women_extreme_sample.csv', 'r') as infile: 
+        print("going through extreme...")
+        reader = csv.reader(infile, delimiter='\t')
+        for row in reader: 
+            w = row[0]
+            sents = tokenize.sent_tokenize(row[4])
+            for sent in sents: 
+                tokens = tokenizer.tokenize(sent)
+                if w in tokens: 
+                    curr_batch.append(tokens)
+                    curr_words.append(w)
+                    curr_meta.append('extreme')
+                    if len(curr_batch) == batch_size: 
+                        batch_sentences.append(curr_batch)
+                        batch_words.append(curr_words)
+                        batch_meta.append(curr_meta)
+                        curr_batch = []
+                        curr_words = []   
+                        curr_meta = []
+                    break            
+    if len(curr_batch) != 0: # fence post
+        batch_sentences.append(curr_batch)
+        batch_words.append(curr_words)
+        batch_meta.append(curr_meta)
+    return batch_sentences, batch_words, batch_meta
+        
+def get_axes_scores_domains(): 
+    '''
+    Apply axes on occurrences of 
+    '''
+    print("batching...")
+    batch_sentences, batch_words, batch_meta = batch_data_domains()
+    
+    print("getting microframe matrix...")
+    m = get_microframe_matrix()
+    
+    word_reps = defaultdict(list) # {word : [[axis scores for each occurrence]]} 
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    layers = [-4, -3, -2, -1] # last four layers
+    model.to(device)
+    model.eval()
+    
+    for i, batch in enumerate(tqdm(batch_sentences)): # for every batch
+        encoded_inputs = tokenizer(batch, is_split_into_words=True, padding=True, truncation=True, 
+             return_tensors="pt")
+        encoded_inputs.to(device)
+        outputs = model(**encoded_inputs, output_hidden_states=True)
+        states = outputs.hidden_states # tuple
+        # batch_size x seq_len x 3072
+        vector = torch.cat([states[i] for i in layers], 2) # concatenate last four
+        for j in range(len(batch)): # for every example
+            word_ids = encoded_inputs.word_ids(j)
+            word_tokenids = defaultdict(list) # {word : [token ids]}
+            for k, word_id in enumerate(word_ids): # for every token
+                if word_id is not None: 
+                    curr_word = batch[j][word_id]
+                    if curr_word == batch_words[i][j]: 
+                        word_tokenids[curr_word].append(k)
+            for word in word_tokenids: 
+                token_ids_word = np.array(word_tokenids[word]) 
+                word_embed = vector[j][token_ids_word]
+                word_embed = word_embed.mean(dim=0).detach().cpu().numpy() # average word pieces
+                if np.isnan(word_embed).any(): 
+                    print("PROBLEM!!!", word, batch[j])
+                    return 
+                word_cat = word + '_' + batch_meta[i][j]
+                word_scores = fastdist.vector_to_matrix_distance(word_embed, m, fastdist.cosine, "cosine")
+                word_reps[word_cat].append(list(word_scores))
+                
+        torch.cuda.empty_cache()
+        
+    with open(WOMEN_OUT + 'scores.json', 'w') as outfile: 
+        json.dump(word_reps, outfile)
 
 def main(): 
     #get_overall_embeddings()
     #project_onto_axes() 
-    get_axes_scores_variants()
+    #get_axes_scores_variants()
+    get_axes_scores_domains()
 
 if __name__ == '__main__':
     main()
