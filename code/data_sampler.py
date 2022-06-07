@@ -317,11 +317,143 @@ def sample_by_vocab(all_words):
             for tup in samples[word]: 
                 writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
                 
+def domain_experiment_inputs(): 
+    vocab = set(['feminists', 'women', 'girls', 'females'])
+    sample_by_vocab(vocab)
+    
+def sample_women_contexts_per_month(k=1000): 
+    with open(LOGS + 'coref_results/mano_gender_labels.json', 'r') as infile: 
+        gender_labels = json.load(infile)
+    # vocab = feminine unigrams 
+    all_words = set()
+    for term in gender_labels: 
+        if gender_labels[term] > 0.75 and ' ' not in term: 
+            all_words.add(term)
+            
+    categories = get_sr_cats()
+    samples = defaultdict(list) # {month: [text]}
+    word_count = Counter() # {month: number of times feminine words seen}
+    # through reddit comments and posts
+    for f in os.listdir(COMMENTS):
+        if f == 'bad_jsons': continue 
+        month = f.replace('RC_', '')
+        print(month)
+        line_number = 0
+        with open(COMMENTS + f + '/part-00000', 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['body']
+                sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
+
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[month] += 1
+                            if len(samples[month]) < k and valid_line(text): 
+                                samples[month].append((line_number, word, sr, text))
+                            elif valid_line(text): 
+                                idx = int(random.random() * word_count[month])
+                                if idx < k: 
+                                    samples[month][idx] = (line_number, word, sr, text)
+                line_number += 1  
+        if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
+            post_path = POSTS + 'RS_' + month + '/part-00000'
+        else: 
+            post_path = POSTS + 'RS_v2_' + month + '/part-00000'
+        with open(post_path, 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['selftext']
+                sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
+
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[month] += 1
+                            if len(samples[month]) < k and valid_line(text): 
+                                samples[month].append((line_number, word, sr, text))
+                            elif valid_line(text): 
+                                idx = int(random.random() * word_count[month])
+                                if idx < k: 
+                                    samples[month][idx] = (line_number, word, sr, text)
+                line_number += 1           
+    # through forums
+    for f in os.listdir(FORUMS):
+        print(f) 
+        line_number = 0
+        with open(FORUMS + f, 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['text_post']
+                if d['date_post'] is None: 
+                    year = "None"
+                    month = "None"
+                else: 
+                    date_time_str = d["date_post"].split('-')
+                    year = date_time_str[0]
+                    month = date_time_str[1]
+                month = year + '-' + month
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[month] += 1
+                            if len(samples[month]) < k:
+                                samples[month].append((line_number, word, f, text))
+                            else: 
+                                idx = int(random.random() * word_count[month])
+                                if idx < k: 
+                                    samples[month][idx] = (line_number, word, f, text)
+                            line_number += 1
+    with open(LOGS + 'women_extreme_sample_time.csv', 'w') as outfile: 
+        writer = csv.writer(outfile, delimiter='\t')
+        for month in samples: 
+            for tup in samples[month]: 
+                writer.writerow([month, str(tup[0]), tup[1], tup[2], tup[3]])
+
+    samples = defaultdict(list) # {word: [text]}
+    word_count = Counter() # {word: number of times seen}
+    # through control
+    for month in os.listdir(CONTROL):
+        print(month)
+        line_number = 0
+        with open(CONTROL + month + '/part-00000', 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                if 'body' in d: 
+                    text = d['body']
+                elif 'selftext' in d: 
+                    text = d['selftext']
+                else: 
+                    line_number += 1
+                    continue
+                sr = d['subreddit'].lower()
+
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[month] += 1
+                            if len(samples[month]) < k and valid_line(text): 
+                                samples[month].append((line_number, word, sr, text))
+                            elif valid_line(text): 
+                                idx = int(random.random() * word_count[month])
+                                if idx < k: 
+                                    samples[month][idx] = (line_number, word, sr, text)
+                line_number += 1
+    with open(LOGS + 'women_control_sample_time.csv', 'w') as outfile: 
+        writer = csv.writer(outfile, delimiter='\t')
+        for month in samples: 
+            for tup in samples[month]: 
+                writer.writerow([month, str(tup[0]), tup[1], tup[2], tup[3]])
+
 def main(): 
     #sample_reddit()
     #sample_forums()
-    vocab = set(['feminists', 'women', 'girls', 'females'])
-    sample_by_vocab(vocab)
+    #domain_experiment_inputs()
+    sample_women_contexts_per_month()
 
 if __name__ == '__main__':
     main()
