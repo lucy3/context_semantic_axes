@@ -442,12 +442,49 @@ def extract_lexical_innovations():
     with open(LOGS + 'lexical_innovations.txt', 'r') as infile: 
         for line in infile: 
             vocab.add(line.strip())
-    #in_d = '/mnt/data0/corpora/reddit/comments/'
-    #out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
-    #extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
+    in_d = '/mnt/data0/corpora/reddit/comments/'
+    out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
+    extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
     in_d = '/mnt/data0/corpora/reddit/submissions/'
     out_d = '/mnt/data0/lucy/manosphere/data/mainstream/'
     extract_mainstream_subreddits(in_d, out_d, vocab, top_n_subreddits)
+    
+def extract_select_subreddits(in_d, out_d, relevant_subs): 
+    """
+    Creates new files containing 
+    jsons of only relevant subreddits
+    @inputs: 
+    - in_d: folder with inputs
+    - out_d: folder with outputs
+    """
+    all_files = sorted(os.listdir(in_d))
+    for f in all_files:
+        year = f.split('-')[0].split('_')[-1]
+        if year in ['2005', '2006', '2020', '2021']: continue
+        filename = f.split('.')[0]
+        if os.path.isdir(out_d + filename): continue # skip ones we already have
+        unpack_file(in_d, f)
+        data = sc.textFile(in_d + filename)
+        not_wanted = data.filter(get_dumb_lines).collect()
+        data = data.filter(lambda line: not get_dumb_lines(line))
+        rel_data = data.filter(lambda line: 'subreddit' in json.loads(line) and \
+                    json.loads(line)['subreddit'].lower() in relevant_subs)
+        rel_data.coalesce(1).saveAsTextFile(out_d + filename)
+        if len(not_wanted) > 0: 
+            # write bad lines to bad_jsons
+            with open(out_d + 'bad_jsons/' + filename + '.txt', 'w') as outfile: 
+                for line in not_wanted:
+                    outfile.write(line + '\n') 
+        pack_file(in_d, f)
+    
+def filter_reddit_dating(): 
+    subreddit_list = ['relationships', 'relationship_advice', 'dating_advice', 'breakups', 'dating']
+    in_d = '/mnt/data0/corpora/reddit/comments/'
+    out_d = '/mnt/data0/lucy/manosphere/data/reddit_dating/'
+    extract_select_subreddits(in_d, out_d, subreddit_list)
+    in_d = '/mnt/data0/corpora/reddit/submissions/'
+    out_d = '/mnt/data0/lucy/manosphere/data/reddit_dating/'
+    extract_select_subreddits(in_d, out_d, subreddit_list)
 
 def main(): 
     #check_duplicates_main()
@@ -456,7 +493,8 @@ def main():
     #detect_bots()
     #count_posts_per_subreddit()
     #get_top_subreddits()
-    extract_lexical_innovations()
+    #extract_lexical_innovations()
+    filter_reddit_dating()
     sc.stop()
 
 if __name__ == '__main__':
