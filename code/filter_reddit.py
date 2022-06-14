@@ -479,9 +479,9 @@ def extract_select_subreddits(in_d, out_d, relevant_subs):
     
 def filter_reddit_dating(): 
     subreddit_list = ['relationships', 'relationship_advice', 'dating_advice', 'breakups', 'dating']
-    in_d = '/mnt/data0/corpora/reddit/comments/'
-    out_d = '/mnt/data0/lucy/manosphere/data/reddit_dating/'
-    extract_select_subreddits(in_d, out_d, subreddit_list)
+#     in_d = '/mnt/data0/corpora/reddit/comments/'
+#     out_d = '/mnt/data0/lucy/manosphere/data/reddit_dating/'
+#     extract_select_subreddits(in_d, out_d, subreddit_list)
     in_d = '/mnt/data0/corpora/reddit/submissions/'
     out_d = '/mnt/data0/lucy/manosphere/data/reddit_dating/'
     extract_select_subreddits(in_d, out_d, subreddit_list)

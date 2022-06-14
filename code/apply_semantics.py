@@ -515,6 +515,7 @@ def batch_data_time(replace=True):
         reader = csv.reader(infile, delimiter='\t')
         for row in reader: 
             month = row[0]
+            line_num = row[1]
             w = row[2]
             if w not in p_cache: 
                 if p.singular_noun(w): # returns True, so plural
