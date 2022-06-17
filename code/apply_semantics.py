@@ -52,11 +52,14 @@ def load_manosphere_vecs(inpath):
     print("Number of reps", full_reps.shape)
     return full_reps, vocab_order
 
-def get_good_axes(): 
+def get_good_axes(zscore=True): 
     '''
     This is copied from axes_occupation_viz.ipynb. 
     '''
-    quality_file_path = LOGS + 'semantics_val/axes_quality_bert-base-prob-zscore.txt'
+    if zscore: 
+        quality_file_path = LOGS + 'semantics_val/axes_quality_bert-base-prob-zscore.txt'
+    else: 
+        quality_file_path = LOGS + 'semantics_val/axes_quality_bert-base-prob.txt'
     scores = defaultdict(dict) # {synset: {word : (predicted, true)}}
     with open(quality_file_path, 'r') as infile: 
         for line in infile: 
@@ -267,11 +270,14 @@ def batch_data():
             batch_meta.append(curr_meta)
     return batch_sentences, batch_words, batch_meta
 
-def get_microframe_matrix(): 
+def get_microframe_matrix(zscore=True): 
     axes, axes_vocab = load_wordnet_axes()
     # synset : (right_vec, left_vec)
-    adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
-    good_axes = get_good_axes()
+    if zscore: 
+        adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
+    else: 
+        adj_poles = get_poles_bert(axes, 'bert-base-prob')
+    good_axes = get_good_axes(zscore=zscore)
     m = []
     pole_order = []
     for pole in sorted(adj_poles.keys()): 
@@ -282,12 +288,16 @@ def get_microframe_matrix():
         right_pole = right_vecs.mean(axis=0)
         microframe = right_pole - left_pole
         m.append(microframe)
-    with open(VARIANT_OUT + 'pole_order.txt', 'w') as outfile: 
+    if zscore: 
+        variant_outpath = VARIANT_OUT + 'pole_order.txt'
+    else: 
+        variant_outpath = VARIANT_OUT + 'pole_order_noz.txt'
+    with open(variant_outpath, 'w') as outfile: 
         for pole in pole_order:
             outfile.write(pole + '\n')
     return np.array(m)
 
-def get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, bert_std, m): 
+def get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, bert_std, m, zscore=True): 
     word_reps = defaultdict(list) # {word : [[axis scores for each occurrence]]} 
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
     model = BertModel.from_pretrained('bert-base-uncased')
@@ -319,7 +329,11 @@ def get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, ber
                     print("PROBLEM!!!", word, batch[j])
                     return 
                 word_cat = word + '_' + batch_meta[i][j]
-                word_embed = (word_embed - bert_mean) / bert_std # z-score
+                if zscore: 
+                    word_embed = (word_embed - bert_mean) / bert_std # z-score
+                else: 
+                    word_embed = np.float64(word_embed)
+                    m = np.float64(m)
                 word_scores = fastdist.vector_to_matrix_distance(word_embed, m, fastdist.cosine, "cosine")
                 word_reps[word_cat].append(list(word_scores))
                 
@@ -445,7 +459,7 @@ def batch_data_domains(replace=False):
         batch_meta.append(curr_meta)
     return batch_sentences, batch_words, batch_meta
         
-def get_axes_scores_domains(replace=False): 
+def get_axes_scores_domains(replace=False, zscore=True): 
     '''
     Apply axes on occurrences of women, feminists, girls, and females
     across domains. 
@@ -457,12 +471,16 @@ def get_axes_scores_domains(replace=False):
     bert_std = np.load(LOGS + 'wikipedia/std_BERT.npy')
     
     print("getting microframe matrix...")
-    m = get_microframe_matrix()
+    m = get_microframe_matrix(zscore=zscore)
     
-    word_reps = get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, bert_std, m)
+    word_reps = get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, bert_std, m, zscore=zscore)
         
-    with open(WOMEN_OUT + str(replace) + '_scores.json', 'w') as outfile: 
-        json.dump(word_reps, outfile)
+    if zscore: 
+        with open(WOMEN_OUT + str(replace) + '_scores.json', 'w') as outfile: 
+            json.dump(word_reps, outfile)
+    else: 
+        with open(WOMEN_OUT + str(replace) + '_scores_noz.json', 'w') as outfile: 
+            json.dump(word_reps, outfile)
         
 def batch_data_time(replace=True): 
     p_cache = {} # words that have already been through inflect 
@@ -571,6 +589,8 @@ def main():
     #get_axes_scores_variants()
     #get_axes_scores_domains(replace=False)
     #get_axes_scores_domains(replace=True)
+    #get_axes_scores_domains(replace=False, zscore=False)
+    #get_axes_scores_domains(replace=True, zscore=False)
     get_axes_scores_over_time(replace=True)
 
 if __name__ == '__main__':

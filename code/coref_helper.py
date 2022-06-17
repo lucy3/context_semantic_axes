@@ -4,7 +4,6 @@ For calculating gender leaning
 ROOT = '/mnt/data0/lucy/manosphere/'
 COREF_FOLDER = ROOT + 'logs/coref_results/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
-COREF_LOGS = '/mnt/data0/dtadimeti/manosphere/logs/'
 SUB_META = ROOT + 'data/subreddits.txt'
 
 from collections import defaultdict, Counter
@@ -68,7 +67,7 @@ def create_coref_df(dataset):
     
     error_file = open(COREF_FOLDER + dataset + '_errors.temp', 'w')
     for filename in tqdm(os.listdir(COREF_FOLDER + dataset.lower() + '/')):
-        if dataset == 'reddit' or dataset == 'CONTROL': 
+        if dataset == 'reddit' or dataset == 'dating': 
             year_month = filename.replace(dataset + '_', '')
             year = year_month.split('-')[0]  
         line_num = 0
@@ -81,8 +80,8 @@ def create_coref_df(dataset):
                 if dataset == 'reddit': 
                     community = contents[0]
                     cat = categories[community]
-                elif dataset == 'CONTROL': 
-                    cat = 'CONTROL'
+                elif dataset == 'dating': 
+                    cat = 'dating'
                 elif dataset == 'forum':
                     cat = filename
                     date = contents[0]
@@ -154,8 +153,8 @@ def create_coref_df(dataset):
     df.to_csv(COREF_FOLDER + 'coref_' + dataset + '_df.csv', index=False, header=True)
     
 def main(): 
-    #create_coref_df('CONTROL')
-    create_coref_df('reddit')
+    create_coref_df('dating')
+    #create_coref_df('reddit')
     #create_coref_df('forum')
 
 if __name__ == "__main__":
