@@ -1,0 +1,72 @@
+Source,Subreddit,Category after majority agreement,Women audience?
+https://rationalwiki.org/wiki/Manosphere,/r/PhilosophyOfRape,TRP,N
+https://rationalwiki.org/wiki/Manosphere,/r/PussyPass,MRA,N
+https://rationalwiki.org/wiki/Manosphere,/r/MensRights,MRA,N
+https://snoopsnoo.com/subreddits/lifestyle/relationships/seduction/,/r/seduction,PUA,N
+https://snoopsnoo.com/subreddits/lifestyle/relationships/seduction/,/r/pickup,PUA,N
+https://snoopsnoo.com/subreddits/lifestyle/relationships/seduction/,/r/askseddit,PUA,N
+https://snoopsnoo.com/subreddits/lifestyle/relationships/seduction/,/r/fPUA,PUA,N
+https://snoopsnoo.com/subreddits/lifestyle/relationships/seduction/,/r/pua,PUA,N
+https://blog.paulrosenzweig.com/explore-reddit/r/askseddit,/r/rsd,PUA,N
+https://blog.paulrosenzweig.com/explore-reddit/r/askseddit,/r/puascience/,PUA,N
+https://rationalwiki.org/wiki/Incel,/r/Incels,Incels,N
+https://rationalwiki.org/wiki/Incel,/r/Braincels,Incels,N
+/r/PurplePillDebate/,/r/TheBluePill,Criticism,N
+/r/PurplePillDebate/,/r/TheRedPill,TRP,N
+/r/TheBluePill,/r/marriedredpill,TRP,N
+/r/TheBluePill,/r/RedPillWives,TRP,Y
+/r/TheBluePill,/r/exredpill,Criticism,N
+ /r/TheRedPill,/r/RedPillWomen,TRP,Y
+ /r/TheRedPill,/r/askTRP,TRP,N
+ /r/TheRedPill,/r/RedPillParenting,TRP,N
+ /r/TheRedPill,/r/thankTRP,TRP,N
+ /r/TheRedPill,/r/becomeaman,TRP,N
+ /r/TheRedPill,/r/altTRP,TRP,N
+ /r/TheRedPill,/r/GEOTRP,TRP,N
+ /r/TheRedPill,/r/TRPOffTopic,TRP,N
+/r/Braincels,r/askanincel,Incels,N
+/r/Braincels,r/BlackPillScience,Incels,N
+/r/Braincels,r/IncelsWithoutHate,Incels,N
+/r/Braincels,r/ForeverAlone,Incels,N
+/r/Braincels,r/depression,Health,N
+/r/Braincels,r/socialanxiety,Health,N
+/r/Braincels,r/SuicideWatch,Health,N
+/r/MensRights,/r/MensRightsLinks,MRA,N
+/r/MensRights,/r/MensRightsLaw,MRA,N
+/r/MensRights,/r/LadyMRAs,MRA,Y
+/r/MensRights,/r/MRRef,MRA,N
+/r/MensRights,/r/MRActivism,MRA,N
+/r/MensRights,/r/masculism/,MRA,N
+/r/MensRights,/r/Intactivists/,MRA,N
+/r/MensRights,/r/Egalitarianism/,MRA,N
+/r/MGTOW,r/Gold_Digger,MRA,N
+/r/MGTOW,r/MgtowMusic,MGTOW,N
+/r/MGTOW,r/MgtowBooks,MGTOW,N
+/r/MGTOW,r/MGTOW,MGTOW,N
+https://www.reddit.com/r/AgainstHateSubreddits/comments/8eh5hv/list_of_known_incel_subs/,/r/Malecels,Incels,N
+https://www.reddit.com/r/AgainstHateSubreddits/comments/8eh5hv/list_of_known_incel_subs/,/r/MaleForeverAlone,Incels,N
+https://incels.wiki/w/Battle_of_Incelistan,/r/1ncels,Incels,N
+https://incels.wiki/w/Battle_of_Incelistan,/r/IncelsPurgatory,Incels,N
+https://incels.wiki/w/Battle_of_Incelistan,/r/Truecels,Incels,N
+https://incels.wiki/w/Battle_of_Incelistan,/r/IncelBrotherhood,Incels,N
+https://incels.wiki/w/Battle_of_Incelistan,/r/LonelyNonViolentMen,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/Foreveraloneteens,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/ForeverAloneLondon,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/gaycel,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/incelselfies,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/gymcels,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/ForeverUnwanted,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/IncelDense,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/SupportCel,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/ForeverAloneDating,Incels,N
+https://incels.wiki/w/index.php?search=subreddit&title=Special%3ASearch&go=Go,/r/Truefemcels,Femcels,Y
+https://incels.wiki/w/Braincels,/r/IncelTears,Criticism,N
+,r/FemaleDatingStrategy,FDS,Y
+r/FemaleDatingStrategy sister community,r/PinkpillFeminism,FDS,Y
+r/FemaleDatingStrategy sister community,r/FDSSuperFans,FDS,Y
+r/FemaleDatingStrategy sister community,r/AskFDS,FDS,Y
+r/FemaleDatingStrategy sister community,r/PornFreeRelationships,FDS,Y
+r/FemaleDatingStrategy sister community,r/FemaleLevelUpStrategy,FDS,Y
+,r/Trufemcels,Femcels,Y
+"""The Official TruFemcel Looksmaxxing Community""",r/TheGlowUp,Femcels,Y
+the name...,r/AskTruFemcels,Femcels,Y
