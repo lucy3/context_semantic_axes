@@ -502,7 +502,8 @@ def batch_data_time(replace=True):
             line_num = row[1]
             w = row[2]
             if w not in p_cache: 
-                if p.singular_noun(w): # returns True, so plural
+                # returns True, so plural
+                if p.singular_noun(w): 
                     p_cache[w] = 'people'
                 else: 
                     p_cache[w] = 'person' 

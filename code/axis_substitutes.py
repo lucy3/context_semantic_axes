@@ -425,10 +425,10 @@ def inspect_contexts(model_name):
 def show_contexts_helper(): 
     '''
     For producing a figure that combines the two approaches
-    Uses 'clean" as the example.
+    Uses 'lovable" as the example.
     '''
     model_name = 'bert-base-uncased'
-    target_example = 'clean.a.01'
+    target_example = 'beautiful.a.01'
     
     synonyms, antonyms = get_syn_ant() # {adj : {synset: [synonyms]} } or {adj : {synset: [antonyms]} }
     tokenizer = get_tokenizer(model_name)
@@ -500,7 +500,7 @@ def show_contexts_helper():
                 adj = line_adj[1]
                 outfile.write(str(line_ID) + '\t' + str(adj) + '\t' + str(synset_side) + '\n')
                 synset_total_vecs += 1
-            if synset_total_vecs == 5: 
+            if synset_total_vecs == 20: 
                 break
                 
     outfile.write('RANDOM EXAMPLES\n')
@@ -520,13 +520,15 @@ def show_contexts_helper():
 def show_contexts():
     '''
     This is used for gathering example contexts for Figure 1
+    First I run show_contexts_helper() and then I manually type in
+    indices to look more closely at for each pole. (not the most
+    efficient...) 
     '''
     #show_contexts_helper()
-    top1 = ['93827074', '80901337', '76114010', '42995229', '63761215'] # all top dirty
-    top2 = ['18755839', '37662617', '4056357', '54754605', '42121215'] # all top clean
-    random1 = ['2879000', '61128837', '40416543', '97127831', '48701118'] # filthy
-    #random2 = ['31595372', '9917079', '26270998', '52113871', '4177186'] # cleanly
-    random2 = ['14623795', '54942550', '63010581', '61775106', '15095992'] # spotless
+    top1 = ['56507959', '15260404', '39118478', '62839535', '82021082'] # top beautiful
+    top2 = ['3250737', '59714408', '56609032', '55065469', '59714408'] # top ugly
+    random1 = ['56423128', '11381592', '17920594', '82920487', '56423128'] # gorgeous
+    random2 = ['43814275', '75932668', '34100786', '72380317', '64050560'] # grotesque
             
     with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
         for line in infile:

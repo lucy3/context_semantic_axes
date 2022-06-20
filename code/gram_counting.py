@@ -21,7 +21,7 @@ from tqdm import tqdm
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
-CONTROL = ROOT + 'data/reddit_control/'
+CONTROL = ROOT + 'data/reddit_dating/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 WORD_COUNT_DIR = ROOT + 'logs/gram_counts/'
 LOGS = ROOT + 'logs/'
@@ -168,21 +168,20 @@ def count_control(per_comment=True):
     
     for filename in os.listdir(CONTROL): 
         if filename == 'bad_jsons': continue
-        m = filename.replace('RC_', '')
+        m = filename.replace('RC_', '').replace('RS_v2_', '').replace('RS_', '')
         file_data = sc.textFile(CONTROL + filename + '/part-00000')
         file_data = file_data.filter(partial(remove_bots, bot_set=bots))
-        cdata = file_data.filter(check_valid_comment)
-        pdata = file_data.filter(check_valid_post)
         
-        cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer, per_comment=per_comment))
-        cdata = cdata.map(lambda n: (n, 1))
-        cdata = cdata.reduceByKey(lambda n1, n2: n1 + n2)
-        
-        pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer, per_comment=per_comment))
-        pdata = pdata.map(lambda n: (n, 1))
-        data = cdata.union(pdata)
-        
-        data = data.reduceByKey(lambda n1, n2: n1 + n2)
+        if filename.startswith('RC_'): 
+            cdata = file_data.filter(check_valid_comment)
+            cdata = cdata.flatMap(partial(get_ngrams_comment, tokenizer=tokenizer, per_comment=per_comment))
+            cdata = cdata.map(lambda n: (n, 1))
+            data = cdata.reduceByKey(lambda n1, n2: n1 + n2)
+        else: 
+            pdata = file_data.filter(check_valid_post)
+            pdata = pdata.flatMap(partial(get_ngrams_post, tokenizer=tokenizer, per_comment=per_comment))
+            pdata = pdata.map(lambda n: (n, 1))
+            data = pdata.reduceByKey(lambda n1, n2: n1 + n2)
         data = data.map(lambda tup: Row(word=tup[0][1], count=tup[1], community=tup[0][0], month=m))
         data_df = sqlContext.createDataFrame(data, schema)
         df = df.union(data_df)
@@ -439,10 +438,10 @@ def main():
 #     count_control(per_comment=False)
 #     count_sr(per_comment=False)
 #     count_forum(per_comment=False)
-#     count_control()
+    count_control()
 #     count_sr()
 #     count_forum()
-#     get_total_tokens()
+    get_total_tokens()
 #     count_lexical_innovations()
 #     mainstream_sustained_periods()
 #     manosphere_sustained_periods()
