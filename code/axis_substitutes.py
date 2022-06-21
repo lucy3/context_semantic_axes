@@ -106,7 +106,7 @@ def batch_data(lines_adj, tokenizer):
     curr_batch = [] # list of list of tokens
     curr_idx = [] # list of masked_index
     curr_metadata = [] # (line_ID, adj)
-    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile: 
+    with open(LOGS + 'wikipedia/adj_data/part-00000', 'r') as infile:
         for line in tqdm(infile, total=num_lines):
             contents = line.split('\t')
             line_num = contents[0]
@@ -140,7 +140,7 @@ def batch_data(lines_adj, tokenizer):
     return batch_sentences, batch_idx, batch_metadata
 
 def get_lines_adj(): 
-    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile: 
+    with open(LOGS + 'wikipedia/adj_lines.json', 'r') as infile:  
         adj_lines = json.load(infile) # {adj : [line IDs]}
         
     lines_adj = defaultdict(list) # {line ID: [adj]}
@@ -546,13 +546,14 @@ def show_contexts():
 def main(): 
     #predict_substitutes('bert-base-uncased')
     #predict_substitutes('bert-large-uncased')
+    predict_substitute_probs('bert-base-uncased')
     #predict_substitute_probs('bert-large-uncased')
     #find_good_contexts_subs('bert-base-uncased')
     #find_good_contexts_subs('bert-large-uncased')
     #find_good_contexts_probs('bert-base-uncased')
     #inspect_contexts('bert-base-uncased')
     #inspect_contexts('bert-large-uncased')
-    show_contexts()
+    #show_contexts()
 
 if __name__ == '__main__':
     main()

@@ -1,8 +1,6 @@
-# A Diachronic Typology of People in the Manosphere and Related Online Communities
+# Contextualized Semantic Axes
 
 ## Code
-
-Each script should be thoroughly commented.
 
 ### Meta
 - `helpers.py`: helper functions
