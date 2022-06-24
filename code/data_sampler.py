@@ -207,81 +207,81 @@ def sample_by_vocab(all_words):
     for comparison. 
     '''
     k = 1000
-#     categories = get_sr_cats()
-#     samples = defaultdict(list) # {word: [text]}
-#     word_count = Counter() # {word: number of times seen}
-#     # through reddit comments and posts
-#     for f in os.listdir(COMMENTS):
-#         if f == 'bad_jsons': continue 
-#         month = f.replace('RC_', '')
-#         print(month)
-#         line_number = 0
-#         with open(COMMENTS + f + '/part-00000', 'r') as infile: 
-#             for line in infile: 
-#                 d = json.loads(line)
-#                 text = d['body']
-#                 sr = d['subreddit'].lower()
-#                 cat = categories[sr]
-#                 if cat == 'Health' or cat == 'Criticism': continue
+    categories = get_sr_cats()
+    samples = defaultdict(list) # {word: [text]}
+    word_count = Counter() # {word: number of times seen}
+    # through reddit comments and posts
+    for f in os.listdir(COMMENTS):
+        if f == 'bad_jsons': continue 
+        month = f.replace('RC_', '')
+        print(month)
+        line_number = 0
+        with open(COMMENTS + f + '/part-00000', 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['body']
+                sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
 
-#                 for word in all_words: 
-#                     if word in text: # fast check
-#                         if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
-#                             word_count[word] += 1
-#                             if len(samples[word]) < k and valid_line(text): 
-#                                 samples[word].append((line_number, month, sr, text))
-#                             elif valid_line(text): 
-#                                 idx = int(random.random() * word_count[word])
-#                                 if idx < k: 
-#                                     samples[word][idx] = (line_number, month, sr, text)
-#                 line_number += 1  
-#         if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
-#             post_path = POSTS + 'RS_' + month + '/part-00000'
-#         else: 
-#             post_path = POSTS + 'RS_v2_' + month + '/part-00000'
-#         with open(post_path, 'r') as infile: 
-#             for line in infile: 
-#                 d = json.loads(line)
-#                 text = d['selftext']
-#                 sr = d['subreddit'].lower()
-#                 cat = categories[sr]
-#                 if cat == 'Health' or cat == 'Criticism': continue
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[word] += 1
+                            if len(samples[word]) < k and valid_line(text): 
+                                samples[word].append((line_number, month, sr, text))
+                            elif valid_line(text): 
+                                idx = int(random.random() * word_count[word])
+                                if idx < k: 
+                                    samples[word][idx] = (line_number, month, sr, text)
+                line_number += 1  
+        if os.path.exists(POSTS + 'RS_' + month + '/part-00000'): 
+            post_path = POSTS + 'RS_' + month + '/part-00000'
+        else: 
+            post_path = POSTS + 'RS_v2_' + month + '/part-00000'
+        with open(post_path, 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['selftext']
+                sr = d['subreddit'].lower()
+                cat = categories[sr]
+                if cat == 'Health' or cat == 'Criticism': continue
 
-#                 for word in all_words: 
-#                     if word in text: # fast check
-#                         if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
-#                             word_count[word] += 1
-#                             if len(samples[word]) < k and valid_line(text): 
-#                                 samples[word].append((line_number, month, sr, text))
-#                             elif valid_line(text): 
-#                                 idx = int(random.random() * word_count[word])
-#                                 if idx < k: 
-#                                     samples[word][idx] = (line_number, month, sr, text)
-#                 line_number += 1           
-#     # through forums
-#     for f in os.listdir(FORUMS):
-#         print(f) 
-#         line_number = 0
-#         with open(FORUMS + f, 'r') as infile: 
-#             for line in infile: 
-#                 d = json.loads(line)
-#                 text = d['text_post']
-#                 for word in all_words: 
-#                     if word in text: # fast check
-#                         if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
-#                             word_count[word] += 1
-#                             if len(samples[word]) < k:
-#                                 samples[word].append((line_number, 'no-month', f, text))
-#                             else: 
-#                                 idx = int(random.random() * word_count[word])
-#                                 if idx < k: 
-#                                     samples[word][idx] = (line_number, 'no-month', f, text)
-#                             line_number += 1
-#     with open(LOGS + 'women_extreme_sample.csv', 'w') as outfile: 
-#         writer = csv.writer(outfile, delimiter='\t')
-#         for word in samples: 
-#             for tup in samples[word]: 
-#                 writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[word] += 1
+                            if len(samples[word]) < k and valid_line(text): 
+                                samples[word].append((line_number, month, sr, text))
+                            elif valid_line(text): 
+                                idx = int(random.random() * word_count[word])
+                                if idx < k: 
+                                    samples[word][idx] = (line_number, month, sr, text)
+                line_number += 1           
+    # through forums
+    for f in os.listdir(FORUMS):
+        print(f) 
+        line_number = 0
+        with open(FORUMS + f, 'r') as infile: 
+            for line in infile: 
+                d = json.loads(line)
+                text = d['text_post']
+                for word in all_words: 
+                    if word in text: # fast check
+                        if re.search(r'\b' + re.escape(word) + r'\b', text) is not None: 
+                            word_count[word] += 1
+                            if len(samples[word]) < k:
+                                samples[word].append((line_number, 'no-month', f, text))
+                            else: 
+                                idx = int(random.random() * word_count[word])
+                                if idx < k: 
+                                    samples[word][idx] = (line_number, 'no-month', f, text)
+                            line_number += 1
+    with open(LOGS + 'women_extreme_sample.csv', 'w') as outfile: 
+        writer = csv.writer(outfile, delimiter='\t')
+        for word in samples: 
+            for tup in samples[word]: 
+                writer.writerow([word, str(tup[0]), tup[1], tup[2], tup[3]])
 
     samples = defaultdict(list) # {word: [text]}
     word_count = Counter() # {word: number of times seen}

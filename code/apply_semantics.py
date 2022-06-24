@@ -1,5 +1,5 @@
 """
-Applies axes to word embeddings
+Applies axes to word embeddings in extreme_rel, general_rel
 """
 from validate_semantics import load_wordnet_axes, get_poles_bert
 from tqdm import tqdm

@@ -25,7 +25,6 @@ import numpy as np
 ROOT = '/mnt/data0/lucy/manosphere/' 
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
-CONTROL = ROOT + 'data/reddit_control/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 ANN_FILE = ROOT + 'data/ann_sig_entities.csv'
 SUB_META = ROOT + 'data/subreddits.txt'
@@ -173,12 +172,7 @@ def get_embeddings():
         json.dump(word_counts, outfile)
 
 def main(): 
-    if 'reddit' == args.dataset: 
-        get_embeddings()
-    elif 'forum' == args.dataset: 
-        get_embeddings() 
-    elif 'control' == args.dataset: 
-        get_embeddings()
+    get_embeddings()
 
 if __name__ == '__main__':
     main()

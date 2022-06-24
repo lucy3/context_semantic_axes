@@ -14,7 +14,7 @@
 
 ### Vocabulary
 
-- `data_sampler.py`: sampling examples for NER evaluation
+- `data_sampler.py`: reservoir sampling examples for NER evaluation, for context-level manosphere analyses
 - `evaluate_ner.py`: evaluate based on human-annotated data
 - Some scripts from booknlp multilingual for running NER model on entire dataset 
 - `find_people.py`: to read in NER output, inspect glossary words, and create spreadsheet for manual annotation 
@@ -22,7 +22,7 @@
 - `lexical_change.py`: for creating time series of words 
 - `k_spectral_centroid.py`: for visualizing how words relate to waves of different communities 
 - `time_series_plots.ipynb`: for examining time series for vocab
-- `coref_forums.py`, `coref_reddit_control.py`, `coref_reddit.py`: running coref on different forum/Reddit datasets
+- `coref_forums.py`, `coref_reddit_control.py`, `coref_reddit.py`, `coref_dating.py`: running coref on different forum/Reddit datasets
 - `coref_job_files.py`: creates job files for coref 
 - `coref_helper.py`: analyzes coref output 
 - `coref_viz.ipynb`: figuring out gender inference steps
@@ -38,7 +38,6 @@
 ### Semantic differences and change 
 
 - `prep_embedding_data.py`: prep data for getting embeddings 
-- `reddit_forum_embeddings.py`: get embeddings for Reddit/forums
+- `reddit_forum_embeddings.py`: get term-level embeddings for Reddit/forums
 - `apply_semantics.py`: apply axes to Reddit and forum embeddings 
 - `semantics_viz.ipynb`: visualizing semantic axes' output 
-- `word_birth_spread.py`: functions for finding birthdates and spread of words outside the manosphere

@@ -19,7 +19,6 @@ ROOT = '/mnt/data0/lucy/manosphere/'
 LOGS = ROOT + 'logs/'
 SUBS = ROOT + 'data/submissions/'
 COMS = ROOT + 'data/comments/'
-CONTROL = ROOT + 'data/reddit_control/'
 FORUMS = ROOT + 'data/cleaned_forums/'
 SUB_META = ROOT + 'data/subreddits.txt'
 
@@ -80,20 +79,6 @@ def preprocess_comment(line, tokenizer=None, year='', vocab=set(), categories={}
     idx = d['id']
     cat = categories[sr] + '_' + year
     word2id, id2sent = preprocess_text(d['body'], idx, cat, tokenizer=tokenizer, vocab=vocab)
-    return (word2id, id2sent)
-
-def preprocess_comment_no_cat(line, tokenizer=None, year='', vocab=set()): 
-    d = json.loads(line)
-    idx = d['id']
-    cat = 'CONTROL_' + year
-    word2id, id2sent = preprocess_text(d['body'], idx, cat, tokenizer=tokenizer, vocab=vocab)
-    return (word2id, id2sent)
-
-def preprocess_post_no_cat(line, tokenizer=None, year='', vocab=set()): 
-    d = json.loads(line)
-    idx = d['id']
-    cat = 'CONTROL_' + year
-    word2id, id2sent = preprocess_text(d['selftext'], idx, cat, tokenizer=tokenizer, vocab=vocab)
     return (word2id, id2sent)
 
 def preprocess_post(line, tokenizer=None, year='', vocab=set(), categories={}): 
@@ -168,54 +153,6 @@ def preprocess_dataset_reddit():
         with open(LOGS + 'semantics_mano/reddit_' + y + '_word2id.json', 'w') as outfile: 
             json.dump(all_word2id, outfile)
         with open(LOGS + 'semantics_mano/reddit_' + y + '_id2sent.json', 'w') as outfile: 
-            json.dump(all_id2sent, outfile)
-                
-    sc.stop()
-    
-def preprocess_dataset_control(): 
-    '''
-    Preprocesses Reddit control dataset with sampling.  
-    We have up to 500 samples of each word in the control
-    set in a year (e.g. 2008). 
-    This function was modified off of preprocess_dataset_reddit()
-    '''
-    vocab = get_vocab()
-    tokenizer = BasicTokenizer(do_lower_case=True)
-    bots = get_bot_set()
-    year_month = defaultdict(list) # {year : [months]}
-
-    for filename in os.listdir(CONTROL): 
-        if not filename.startswith('2'): continue
-        y = filename.split('-')[0]
-        year_month[y].append(filename)
-    for y in year_month: 
-        all_word2id = sc.emptyRDD() # []
-        all_id2sent = sc.emptyRDD() # [(id, sent)]
-        for filename in year_month[y]: 
-            m = filename
-            file_data = sc.textFile(CONTROL + filename + '/part-00000')
-            file_data = file_data.filter(partial(remove_bots, bot_set=bots))
-            cdata = file_data.filter(check_valid_comment)
-            pdata = file_data.filter(check_valid_post)
-            cdata = cdata.map(partial(preprocess_comment_no_cat, tokenizer=tokenizer, year=y, vocab=vocab))
-            cword2id = cdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
-            cword2id = cword2id.reduceByKey(lambda n1, n2: n1 + n2)
-            cid2sent = cdata.flatMap(lambda x: x[1])
-            pdata = pdata.map(partial(preprocess_post_no_cat, tokenizer=tokenizer, year=y, vocab=vocab))
-            pword2id = pdata.flatMap(lambda x: x[0]).map(lambda tup: (tup[0], [tup[1]]))
-            pword2id = pword2id.reduceByKey(lambda n1, n2: n1 + n2)
-            pid2sent = pdata.flatMap(lambda x: x[1])
-            all_word2id = sc.union([all_word2id, cword2id, pword2id])
-            all_word2id = all_word2id.reduceByKey(lambda n1, n2: n1 + n2)
-            all_id2sent = sc.union([all_id2sent, cid2sent, pid2sent])
-        all_word2id = all_word2id.map(exact_sample).collectAsMap()
-        ids_to_keep = set()
-        for k in all_word2id: 
-            ids_to_keep.update(all_word2id[k])
-        all_id2sent = all_id2sent.filter(lambda tup: tup[0] in ids_to_keep).collectAsMap()
-        with open(LOGS + 'semantics_mano/control_' + y + '_word2id.json', 'w') as outfile: 
-            json.dump(all_word2id, outfile)
-        with open(LOGS + 'semantics_mano/control_' + y + '_id2sent.json', 'w') as outfile: 
             json.dump(all_id2sent, outfile)
                 
     sc.stop()
@@ -345,7 +282,6 @@ def preprocess_gender_variant_sents():
 
 def main(): 
     #preprocess_dataset_reddit()
-    #preprocess_dataset_control()
     #preprocess_dataset_forums()
     preprocess_gender_variant_sents()
 
