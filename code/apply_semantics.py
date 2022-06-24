@@ -581,9 +581,8 @@ def get_axes_scores_over_time(replace=True):
     
     word_reps = get_bert_embeddings(batch_sentences, batch_words, batch_meta, bert_mean, bert_std, m)
     
-    # TODO: uncomment
-#     with open(WOMEN_OUT + str(replace) + '_time_scores.json', 'w') as outfile: 
-#         json.dump(word_reps, outfile)
+    with open(WOMEN_OUT + str(replace) + '_time_scores.json', 'w') as outfile: 
+        json.dump(word_reps, outfile)
 
 def main(): 
     #get_overall_embeddings()
