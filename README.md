@@ -1,5 +1,7 @@
 # Discovering Differences in the Representation of People using Contextualized Semantic Axes
 
+[Spreadsheets](https://docs.google.com/spreadsheets/d/11QGo0hjN-q-BDhdWX5BZpROa3OZ7lxZe80zNvKqv4TU/edit?usp=sharing) containing vocabulary and subreddits. 
+
 ## Code
 
 ### Meta
@@ -34,6 +36,10 @@
 - `axis_substitutes.py`: getting "good" contexts for adjectives in Wikipedia sentences.
 - `validate_semantics.py`: functions for applying axes on occupation dataset
 - `axes_occupation_viz.ipynb`: evaluate axes on occupation data
+
+`wikipedia/substitutes/bert-default` can be found [here](https://drive.google.com/file/d/1-EQ9V9xuuEJN09ju5qPysHbT_OzGPNHR/view?usp=sharing).
+
+`wikipedia/substitutes/bert-base-prob` can be found [here](https://drive.google.com/file/d/1XVmfWUy_EubnmAAf6OaRQpQn_n9IPxFd/view?usp=sharing). You will need both this and `bert-default` since we backoff to `bert-default` for cases where words are split into wordpieces. 
 
 ### Semantic differences and change 
 
