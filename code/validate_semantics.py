@@ -528,12 +528,15 @@ def main():
 #                    exp_name='bert-zscore', calc_pval=True)
 #     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
 #                        exp_name='bert-base-prob', calc_pval=True)
-    frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
-                       exp_name='bert-base-prob-zscore', calc_pval=True) 
+#     frameaxis_bert(DATA + 'semantics/cleaned/occupations.json', 'person',
+#                        exp_name='bert-base-prob-zscore', calc_pval=True) 
     # ------ GLOVE -------
 #     save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
 #     frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
 #                     'occupations', exp_name='default', calc_pval=True)
+    save_frameaxis_inputs(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 'occupations', exp_name='default')
+    frameaxis_glove(DATA + 'semantics/cleaned/occupations.json', DATA + 'semantics/occupation_sents.json', 
+                    'occupations', exp_name='default', calc_pval=True)
 
 if __name__ == '__main__':
     main()
