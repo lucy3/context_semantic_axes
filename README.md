@@ -1,4 +1,4 @@
-# Contextualized Semantic Axes
+# Discovering Differences in the Representation of People using Contextualized Semantic Axes
 
 ## Code
 
