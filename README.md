@@ -37,9 +37,16 @@
 - `validate_semantics.py`: functions for applying axes on occupation dataset (this contains functions for loading axes) 
 - `axes_occupation_viz.ipynb`: evaluate axes on occupation data
 
-`wikipedia/substitutes/bert-default` can be found [here](https://drive.google.com/file/d/1-EQ9V9xuuEJN09ju5qPysHbT_OzGPNHR/view?usp=sharing).
+`wikipedia/substitutes/bert-default` can be found [here](https://drive.google.com/file/d/1-EQ9V9xuuEJN09ju5qPysHbT_OzGPNHR/view?usp=sharing). 
 
 `wikipedia/substitutes/bert-base-prob` can be found [here](https://drive.google.com/file/d/1XVmfWUy_EubnmAAf6OaRQpQn_n9IPxFd/view?usp=sharing). You will need both this and `bert-default` since we backoff to `bert-default` for cases where words are split into wordpieces. 
+
+The z-scored versions of these vectors are much better than their original versions: 
+```
+from validate_semantics import load_wordnet_axes, get_poles_bert
+axes, axes_vocab = load_wordnet_axes()
+adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
+```
 
 ### Semantic differences and change 
 
