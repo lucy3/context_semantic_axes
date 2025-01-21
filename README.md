@@ -44,9 +44,17 @@
 The z-scored versions of these vectors are much better than their original versions: 
 ```
 from validate_semantics import load_wordnet_axes, get_poles_bert
+
 axes, axes_vocab = load_wordnet_axes()
 adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
-get_good_axes() # get axes that are self-consistent
+good_axes = get_good_axes() # get axes that are self-consistent
+
+for pole in tqdm(adj_poles): 
+    if pole not in good_axes: continue
+    left_vecs, right_vecs = adj_poles[pole]
+    left_pole = left_vecs.mean(axis=0)
+    right_pole = right_vecs.mean(axis=0)
+    microframe = right_pole - left_pole
 ```
 
 ### Semantic differences and change 
