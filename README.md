@@ -43,7 +43,7 @@
 
 The z-scored versions of these vectors are much better than their original versions: 
 ```
-from validate_semantics import load_wordnet_axes, get_poles_bert
+from validate_semantics import load_wordnet_axes, get_poles_bert, get_good_axes
 
 axes, axes_vocab = load_wordnet_axes()
 adj_poles = get_poles_bert(axes, 'bert-base-prob-zscore')
